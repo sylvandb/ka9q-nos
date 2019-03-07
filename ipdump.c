@@ -20,8 +20,8 @@ struct mbuf **bpp,
 int check
 ){
 	struct ip ip;
-	uint16 ip_len;
-	uint16 csum;
+	uint ip_len;
+	uint csum;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;	
@@ -55,7 +55,7 @@ struct ip *ip;
 struct mbuf **bpp;
 int check;
 {
-	uint16 length;
+	uint length;
 	int i;
 
 	/* Trim data segment if necessary. */

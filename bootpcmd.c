@@ -163,7 +163,7 @@ void *p;
         Nhosts = 0;
         da_shut();
         readtab_shut();
-        del_udp (Bootpd_cb);
+        del_udp (&Bootpd_cb);
         Bootpd_cb = NULL;
 
 	bp_log ("Bootpd shutdown %s", ctime (&now));

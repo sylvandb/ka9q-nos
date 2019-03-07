@@ -1,6 +1,10 @@
 #ifndef	_PKTDRVR_H
 #define	_PKTDRVR_H
 
+#ifndef __dj_include_dpmi_h_
+#include <dpmi.h>
+#endif
+
 #ifndef	_MBUF_H
 #include "mbuf.h"
 #endif
@@ -91,25 +95,24 @@ typedef union {
 struct pktdrvr {
 	int class;	/* Interface class (ether/slip/etc) */
 	int intno;	/* Interrupt vector */
-	short handle1;	/* Driver handle(s) */
-	short handle2;
-	short handle3;
+	short handle;	/* Driver handle */
 	struct mbuf *buffer;	/* Currently allocated rx buffer */
 	struct iface *iface;
+	_go32_dpmi_seginfo rmcb_seginfo;
+	_go32_dpmi_registers rmcb_registers;
+	int32 dosbase;
+	int32 dossize;
+	int32 wptr;	/* write pointer into DOS buffer */
+	int32 rptr;	/* read pointer into DOS buffer */
+	int32 cnt;	/* Count of unread bytes in buffer */
+	int32 overflows;
 };
 
 extern struct pktdrvr Pktdrvr[];
 
 /* In pktdrvr.c: */
-uint8 *pkint(int dev,unsigned short cx, unsigned short ax);
 void pk_tx(int dev,void *arg1,void *unused);
 int pk_send(struct mbuf **bpp,struct iface *iface,int32 gateway,uint8 tos);
-extern char Pkt_sig[];
-
-/* In pkvec.asm: */
-INTERRUPT pkvec0(void);
-INTERRUPT pkvec1(void);
-INTERRUPT pkvec2(void);
 
 #endif	/* MSDOS */
 

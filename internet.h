@@ -54,7 +54,7 @@ struct pseudo_header {
 	int32 source;		/* IP source */
 	int32 dest;		/* IP destination */
 	char protocol;		/* Protocol */
-	uint16 length;		/* Data field length */
+	uint length;		/* Data field length */
 };
 
 /* Format of a MIB entry for statistics gathering */

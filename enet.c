@@ -17,7 +17,7 @@ htonether(
 struct ether *ether,
 struct mbuf **bpp
 ){
-	register uint8 *cp;
+	uint8 *cp;
 
 	if(bpp == NULL)
 		return;
@@ -55,10 +55,10 @@ uint8 *addr
 /* Convert an Ethernet address from Hex/ASCII to binary */
 int
 gether(
-register uint8 *out,
-register char *cp
+uint8 *out,
+char *cp
 ){
-	register int i;
+	int i;
 
 	for(i=6; i!=0; i--){
 		*out++ = htoi(cp);
@@ -89,7 +89,7 @@ enet_output(
 struct iface *iface,	/* Pointer to interface control block */
 uint8 *dest,		/* Destination Ethernet address */
 uint8 *source,		/* Source Ethernet address */
-uint16 type,		/* Type field */
+uint type,		/* Type field */
 struct mbuf **bpp	/* Data field */
 ){
 	struct ether ep;

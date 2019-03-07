@@ -19,7 +19,7 @@ int32 source,dest;
 int check;		/* If 0, bypass checksum verify */
 {
 	struct icmp icmp;
-	uint16 csum;
+	uint csum;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;

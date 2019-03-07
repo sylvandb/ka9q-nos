@@ -15,7 +15,7 @@ struct mbuf **bpp,
 struct pseudo_header *ph
 ){
 	register uint8 *cp;
-	uint16 checksum;
+	uint checksum;
 
 	/* Allocate UDP protocol header and fill it in */
 	pushdown(bpp,NULL,UDPHDR);
@@ -53,7 +53,7 @@ struct mbuf **bpp
 /* Extract UDP checksum value from a network-format header without
  * disturbing the header
  */
-uint16
+uint
 udpcksum(
 struct mbuf *bp
 ){

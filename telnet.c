@@ -61,32 +61,29 @@ void *p;
 	}
 	sp->inproc = keychar;	/* Intercept ^C */
 	fsocket.sin_family = AF_INET;
-	if(argc < 3)
-		fsocket.sin_port = IPPORT_TELNET;
-	else
-		fsocket.sin_port = atoi(argv[2]);
+	fsocket.sin_port = (argc < 3) ? IPPORT_TELNET : atoi(argv[2]);
 
 	if(SETSIG(EABORT)){
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("Resolving %s...\n",argv[1]);
 	if((fsocket.sin_addr.s_addr = resolve(argv[1])) == 0){
 		printf(Badhost,argv[1]);
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	if((s = socket(AF_INET,SOCK_STREAM,0)) == -1){
 		printf("Can't create socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	settos(s,LOW_DELAY);
 	sp->network = fdopen(s,"r+t");
-	setvbuf(sp->network,NULL,_IOLBF,BUFSIZ);
+/*	setvbuf(sp->network,NULL,_IOLBF,BUFSIZ); */
 	return tel_connect(sp,(struct sockaddr *)&fsocket,SOCKSIZE);
 }
 /* Generic interactive connect routine, used by Telnet, AX.25, NET/ROM */
@@ -107,7 +104,7 @@ int len;
 	if(connect(fileno(sp->network),fsocket,len) == -1){
 		perror("connect failed");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("Connected\n");
@@ -125,6 +122,7 @@ struct telnet *tn;
 	struct session *sp;
 	char *cp;
 	FILE *network;
+	char buf[BUFSIZ];
 
 	sp = tn->session;
 	network = sp->network;
@@ -139,6 +137,9 @@ struct telnet *tn;
 			putchar((char)c);
 			if(sp->record != NULL)
 				putc(c,sp->record);
+			/* If we're likely to block on the next getc, flush */
+			if(frrdy(network) == 0)
+				fflush(stdout);
 			continue;
 		}
 		/* IAC received, get command sequence */
@@ -175,12 +176,11 @@ quit:	/* A close was received from the remote host.
 	setvbuf(sp->output,NULL,_IOLBF,BUFSIZ);
 	cp = sockerr(fileno(network));
 	printf("Closed: %s\n", cp != NULL ? cp : "EOF");
-	killproc(sp->proc1);
-	sp->proc1 = NULL;
+	killproc(&sp->proc1);
 	fclose(sp->network);
 	sp->network = NULL;
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 }
 
 /* User telnet output task, started by user telnet command */
@@ -296,7 +296,7 @@ int opt;
 				fmode(tn->session->network,STREAM_BINARY);
 				setvbuf(tn->session->network,NULL,_IONBF,0);
 				fmode(stdout,STREAM_BINARY);
-				setvbuf(stdout,NULL,_IONBF,0);
+/*				setvbuf(stdout,NULL,_IONBF,0); */
 			}
 		}
 		tn->remote[opt] = 1;
@@ -330,7 +330,7 @@ int opt;
 			fmode(tn->session->network,STREAM_ASCII);
 			setvbuf(tn->session->network,NULL,_IOLBF,BUFSIZ);
 			fmode(stdout,STREAM_ASCII);
-			setvbuf(stdout,NULL,_IOLBF,BUFSIZ);
+/*			setvbuf(stdout,NULL,_IOLBF,BUFSIZ); */
 		}
 	}
 	answer(tn,DONT,opt);	/* Must always accept */

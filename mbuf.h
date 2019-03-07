@@ -16,11 +16,11 @@ extern long Pushalloc;		/* Calls to pushdown that call malloc() */
 struct mbuf {
 	struct mbuf *next;	/* Links mbufs belonging to single packets */
 	struct mbuf *anext;	/* Links packets on queues */
-	uint16 size;		/* Size of associated data buffer */
+	uint size;		/* Size of associated data buffer */
 	int refcnt;		/* Reference count */
 	struct mbuf *dup;	/* Pointer to duplicated mbuf */
 	uint8 *data;		/* Active working pointers */
-	uint16 cnt;
+	uint cnt;
 };
 
 #define	PULLCHAR(bpp)\
@@ -28,38 +28,38 @@ struct mbuf {
  ((*bpp)->cnt--,*(*bpp)->data++) : pullchar(bpp))
 
 /* In mbuf.c: */
-struct mbuf *alloc_mbuf(uint16 size);
-struct mbuf *free_mbuf(struct mbuf **bpp);
+struct mbuf *alloc_mbuf(uint size);
+void free_mbuf(struct mbuf **bpp);
 
-struct mbuf *ambufw(uint16 size);
-struct mbuf *copy_p(struct mbuf *bp,uint16 cnt);
-uint16 dup_p(struct mbuf **hp,struct mbuf *bp,uint16 offset,uint16 cnt);
-uint16 extract(struct mbuf *bp,uint16 offset,void *buf,uint16 len);
+struct mbuf *ambufw(uint size);
+struct mbuf *copy_p(struct mbuf *bp,uint cnt);
+uint dup_p(struct mbuf **hp,struct mbuf *bp,uint offset,uint cnt);
+uint extract(struct mbuf *bp,uint offset,void *buf,uint len);
 struct mbuf *free_p(struct mbuf **bpp);
-uint16 len_p(struct mbuf *bp);
-void trim_mbuf(struct mbuf **bpp,uint16 length);
+uint len_p(struct mbuf *bp);
+void trim_mbuf(struct mbuf **bpp,uint length);
 int write_p(FILE *fp,struct mbuf *bp);
 
 struct mbuf *dequeue(struct mbuf **q);
 void enqueue(struct mbuf **q,struct mbuf **bpp);
 void free_q(struct mbuf **q);
-uint16 len_q(struct mbuf *bp);
+uint len_q(struct mbuf *bp);
 
-struct mbuf *qdata(void *data,uint16 cnt);
-uint16 dqdata(struct mbuf *bp,void *buf,unsigned cnt);
+struct mbuf *qdata(const void *data,uint cnt);
+uint dqdata(struct mbuf *bp,void *buf,unsigned cnt);
 
 void append(struct mbuf **bph,struct mbuf **bpp);
-void pushdown(struct mbuf **bpp,void *buf,uint16 size);
-uint16 pullup(struct mbuf **bph,void *buf,uint16 cnt);
+void pushdown(struct mbuf **bpp,void *buf,uint size);
+uint pullup(struct mbuf **bph,void *buf,uint cnt);
 
 #define	pullchar(x) pull8(x)
 int pull8(struct mbuf **bpp);       /* returns -1 if nothing */
 long pull16(struct mbuf **bpp);	/* returns -1 if nothing */
 int32 pull32(struct mbuf **bpp);	/* returns  0 if nothing */
 
-uint16 get16(uint8 *cp);
+uint get16(uint8 *cp);
 int32 get32(uint8 *cp);
-uint8 *put16(uint8 *cp,uint16 x);
+uint8 *put16(uint8 *cp,uint x);
 uint8 *put32(uint8 *cp,int32 x);
 
 void iqstat(void);

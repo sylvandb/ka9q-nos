@@ -11,12 +11,10 @@ static uint8 *getq(struct rr **rrpp,uint8 *msg,uint8 *cp);
 static uint8 *ntohrr(struct rr **rrpp,uint8 *msg,uint8 *cp);
 
 int
-ntohdomain(dhdr,bpp)
-register struct dhdr *dhdr;
-struct mbuf **bpp;
+ntohdomain(struct dhdr *dhdr,struct mbuf **bpp)
 {
-	uint16 tmp,len;
-	register uint16 i;
+	uint tmp,len;
+	uint i;
 	uint8 *msg,*cp;
 	struct rr **rrpp;
 
@@ -98,12 +96,9 @@ struct mbuf **bpp;
 	return 0;
 }
 static uint8 *
-getq(rrpp,msg,cp)
-struct rr **rrpp;
-uint8 *msg;
-uint8 *cp;
+getq(struct rr **rrpp,uint8 *msg,uint8 *cp)
 {
-	register struct rr *rrp;
+	struct rr *rrp;
 	int len;
 	char *name;
 
@@ -127,12 +122,12 @@ uint8 *cp;
 }
 /* Read a resource record from a domain message into a host structure */
 static uint8 *
-ntohrr(rrpp,msg,cp)
-struct rr **rrpp; /* Where to allocate resource record structure */
-uint8 *msg;	/* Pointer to beginning of domain message */
-uint8 *cp;	/* Pointer to start of encoded RR record */
+ntohrr(
+struct rr **rrpp, /* Where to allocate resource record structure */
+uint8 *msg,	/* Pointer to beginning of domain message */
+uint8 *cp)	/* Pointer to start of encoded RR record */
 {
-	register struct rr *rrp;
+	struct rr *rrp;
 	int len;
 	char *name;
 
@@ -246,15 +241,15 @@ uint8 *cp;	/* Pointer to start of encoded RR record */
 
 /* Convert a compressed domain name to the human-readable form */
 static int
-dn_expand(msg,eom,compressed,full,fullen)
-uint8 *msg;		/* Complete domain message */
-uint8 *eom;
-uint8 *compressed;	/* Pointer to compressed name */
-char *full;		/* Pointer to result buffer */
-int fullen;		/* Length of same */
+dn_expand(
+uint8 *msg,		/* Complete domain message */
+uint8 *eom,
+uint8 *compressed,	/* Pointer to compressed name */
+char *full,		/* Pointer to result buffer */
+int fullen)		/* Length of same */
 {
 	unsigned int slen;	/* Length of current segment */
-	register uint8 *cp;
+	uint8 *cp;
 	int clen = 0;	/* Total length of compressed name */
 	int indirect = 0;	/* Set if indirection encountered */
 	int nseg = 0;		/* Total number of segments in name */

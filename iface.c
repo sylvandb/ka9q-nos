@@ -11,7 +11,6 @@
 #include "netuser.h"
 #include "ax25.h"
 #include "enet.h"
-#include "pktdrvr.h"
 #include "cmdparse.h"
 #include "commands.h"
 #include "trace.h"
@@ -179,7 +178,7 @@ network(int i,void *v1,void *v2)
 
 loop:
 	for(;;){
-		i_state = dirps();
+		i_state = disable();
 		bp = Hopper;
 		if(bp != NULL){
 			bp = dequeue(&Hopper);
@@ -218,6 +217,8 @@ loop:
 int
 net_route(struct iface *ifp,struct mbuf **bpp)
 {
+	if(bpp == NULL || *bpp == NULL)
+		return 0;	/* bogus */
 	pushdown(bpp,&ifp,sizeof(ifp));
 	enqueue(&Hopper,bpp);
 	return 0;
@@ -230,7 +231,7 @@ nu_send(struct mbuf **bpp,struct iface *ifp,int32 gateway,uint8 tos)
 	return (*ifp->raw)(ifp,bpp);
 }
 int
-nu_output(struct iface *ifp,uint8 *dest,uint8 *src,uint16 type,struct mbuf **bpp)
+nu_output(struct iface *ifp,uint8 *dest,uint8 *src,uint type,struct mbuf **bpp)
 {
 	return (*ifp->raw)(ifp,bpp);
 }
@@ -425,7 +426,7 @@ showiface(struct iface *ifp)
 int
 dodetach(int argc,char *argv[],void *p)
 {
-	register struct iface *ifp;
+	struct iface *ifp;
 
 	if((ifp = if_lookup(argv[1])) == NULL){
 		printf("Interface %s unknown\n",argv[1]);
@@ -469,9 +470,9 @@ if_detach(struct iface *ifp)
 	if(ifp->stop != NULL)
 		(*ifp->stop)(ifp);
 
-	killproc(ifp->rxproc);
-	killproc(ifp->txproc);
-	killproc(ifp->supv);
+	killproc(&ifp->rxproc);
+	killproc(&ifp->txproc);
+	killproc(&ifp->supv);
 
 	/* Free allocated memory associated with this interface */
 	if(ifp->name != NULL)
@@ -510,7 +511,7 @@ iftxqlen(int argc,char *argv[],void *p)
 struct iface *
 if_lookup(char *name)
 {
-	register struct iface *ifp;
+	struct iface *ifp;
 
 	for(ifp = Ifaces; ifp != NULL; ifp = ifp->next)
 		if(strcmp(ifp->name,name) == 0)
@@ -526,7 +527,7 @@ if_lookup(char *name)
 struct iface *
 ismyaddr(int32 addr)
 {
-	register struct iface *ifp;
+	struct iface *ifp;
 
 	if(addr == INADDR_ANY)
 		return &Loopback;

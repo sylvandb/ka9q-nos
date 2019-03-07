@@ -36,7 +36,6 @@
 #define	DEF_RTT	5000	/* Initial guess at round trip time (5 sec) */
 #define	MSL2	30	/* Guess at two maximum-segment lifetimes */
 #define	MIN_RTO	500L	/* Minimum timeout, milliseconds */
-#define	TCP_HDR_PAD	70	/* mbuf size to preallocate for headers */
 #define	DEF_WSCALE	0	/* Our window scale option */
 
 #define	geniss()	((int32)msclock() << 12) /* Increment clock at 4 MB/sec */
@@ -58,14 +57,14 @@
 #define TCPLEN		20	/* Minimum Header length, bytes */
 #define	TCP_MAXOPT	40	/* Largest option field, bytes */
 struct tcp {
-	uint16 source;	/* Source port */
-	uint16 dest;	/* Destination port */
+	uint source;	/* Source port */
+	uint dest;	/* Destination port */
 	int32 seq;	/* Sequence number */
 	int32 ack;	/* Acknowledgment number */
-	uint16 wnd;			/* Receiver flow control window */
-	uint16 checksum;		/* Checksum */
-	uint16 up;			/* Urgent pointer */
-	uint16 mss;			/* Optional max seg size */
+	uint wnd;			/* Receiver flow control window */
+	uint checksum;		/* Checksum */
+	uint up;			/* Urgent pointer */
+	uint mss;			/* Optional max seg size */
 	uint8 wsopt;			/* Optional window scale factor */
 	uint32 tsval;			/* Outbound timestamp */
 	uint32 tsecr;			/* Timestamp echo field */
@@ -97,7 +96,7 @@ struct reseq {
 	struct reseq *next;	/* Linked-list pointer */
 	struct tcp seg;		/* TCP header */
 	struct mbuf *bp;	/* data */
-	uint16 length;		/* data length */
+	uint length;		/* data length */
 	char tos;		/* Type of service */
 };
 /* These numbers match those defined in the MIB for TCP connection state */
@@ -141,7 +140,7 @@ struct tcb {
 		int32 wl1;	/* Sequence number used for last window update */
 		int32 wl2;	/* Ack number used for last window update */
 		int32 wnd;	/* Other end's offered receive window */
-		uint16 up;	/* Send urgent pointer */
+		uint up;	/* Send urgent pointer */
 		uint8 wind_scale;/* Send window scale */
 	} snd;
 	int32 iss;		/* Initial send sequence number */
@@ -154,7 +153,7 @@ struct tcb {
 	struct {
 		int32 nxt;	/* Incoming sequence number expected next */
 		int32 wnd;	/* Our offered receive window */
-		uint16 up;	/* Receive urgent pointer */
+		uint up;	/* Receive urgent pointer */
 		uint8 wind_scale;/* Recv window scale */
 	} rcv;
 	int32 last_ack_sent;	/* Last ack sent for timestamp purposes */
@@ -211,9 +210,11 @@ struct tcb {
 	int32 unreach;		/* Count of incoming ICMP unreachables */
 	int32 timeouts;		/* Count of retransmission timeouts */
 	int32 lastack;		/* Time of last received ack */
-	int32 txbw;		/* Estimate of transmit bandwidth */
+	int32 outlen;		/* Average tx ack amount */
+	int32 outrate;		/* Average tx ack interval, ms */
 	int32 lastrx;		/* Time of last received data */
-	int32 rxbw;		/* Estimate of receive bandwidth */
+	int32 inlen;		/* Average receive data size */
+	int32 inrate;		/* Average receive packet interval,ms */
 };
 /* TCP round-trip time cache */
 struct tcp_rtt {
@@ -226,12 +227,12 @@ extern int (*Kicklist[])();
 
 /* TCP statistics counters */
 struct tcp_stat {
-	uint16 runt;		/* Smaller than minimum size */
-	uint16 checksum;		/* TCP header checksum errors */
-	uint16 conout;		/* Outgoing connection attempts */
-	uint16 conin;		/* Incoming connection attempts */
-	uint16 resets;		/* Resets generated */
-	uint16 bdcsts;		/* Bogus broadcast packets */
+	uint runt;		/* Smaller than minimum size */
+	uint checksum;		/* TCP header checksum errors */
+	uint conout;		/* Outgoing connection attempts */
+	uint conin;		/* Incoming connection attempts */
+	uint resets;		/* Resets generated */
+	uint bdcsts;		/* Bogus broadcast packets */
 };
 extern struct mib_entry Tcp_mib[];
 #define	tcpRtoAlgorithm	Tcp_mib[1].value.integer
@@ -257,11 +258,11 @@ extern char *Tcpreasons[];
 /* In tcpcmd.c: */
 extern int Tcp_tstamps;
 extern int32 Tcp_irtt;
-extern uint16 Tcp_limit;
-extern uint16 Tcp_mss;
+extern uint Tcp_limit;
+extern uint Tcp_mss;
 extern int Tcp_syndata;
 extern int Tcp_trace;
-extern uint16 Tcp_window;
+extern uint Tcp_window;
 
 void st_tcp(struct tcb *tcb);
 
@@ -301,11 +302,11 @@ void tcp_timeout(void *p);
 
 /* In tcpuser.c: */
 int close_tcp(struct tcb *tcb);
-int del_tcp(struct tcb *tcb);
+int del_tcp(struct tcb **tcb);
 int kick(int32 addr);
 int kick_tcp(struct tcb *tcb);
 struct tcb *open_tcp(struct socket *lsocket,struct socket *fsocket,
-	int mode,uint16 window,
+	int mode,uint window,
 	void (*r_upcall)(struct tcb *tcb,int32 cnt),
 	void (*t_upcall)(struct tcb *tcb,int32 cnt),
 	void (*s_upcall)(struct tcb *tcb,int old,int new),
@@ -314,7 +315,7 @@ int32 recv_tcp(struct tcb *tcb,struct mbuf **bpp,int32 cnt);
 void reset_all(void);
 void reset_tcp(struct tcb *tcb);
 long send_tcp(struct tcb *tcb,struct mbuf **bpp);
-char *tcp_port(uint16 n);
+char *tcp_port(uint n);
 int tcpval(struct tcb *tcb);
 
 #endif	/* _TCP_H */

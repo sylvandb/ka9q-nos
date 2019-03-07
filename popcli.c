@@ -331,7 +331,7 @@ delete_ccb()
 static struct
 pop_ccb *new_ccb()
 {
-	register struct pop_ccb *ccb;
+	struct pop_ccb *ccb;
 
 	if ((ccb = (struct pop_ccb *) callocw(1,sizeof(struct pop_ccb))) == NULL)
 		return(NULL);

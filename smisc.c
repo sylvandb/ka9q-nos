@@ -1,4 +1,4 @@
-/* Miscellaneous Internet servers: discard, echo and remote
+/* Miscellaneous Internet servers: discard, echo
  * Copyright 1991 Phil Karn, KA9Q
  */
 #include <stdio.h>
@@ -6,8 +6,6 @@
 #include "mbuf.h"
 #include "socket.h"
 #include "proc.h"
-#include "remote.h"
-#include "smtp.h"
 #include "tcp.h"
 #include "commands.h"
 #include "hardware.h"
@@ -17,8 +15,6 @@
 #include "devparam.h"
 #include "telnet.h"
 
-char *Rempass = "";	/* Remote access password */
-
 static int chkrpass(struct mbuf *bp);
 static void discserv(int s,void *unused,void *p);
 static void echoserv(int s,void *unused,void *p);
@@ -26,9 +22,6 @@ static void termserv(int s,void *unused,void *p);
 static void termrx(int s,void *p1,void *p2);
 static void tunregister(struct iface *,int);
 static void tregister(struct iface *);
-
-static int Rem = -1;
-static int Bsr = -1;
 
 struct tserv {
 	struct tserv *next;
@@ -39,25 +32,22 @@ struct tserv *Tserv;
 
 /* Start up TCP discard server */
 int
-dis1(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
+dis1(
+int argc,
+char *argv[],
+void *p
+){
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_DISCARD;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_DISCARD: atoi(argv[1]);
 	return start_tcp(port,"Discard Server",discserv,576);
 }
 static void
-discserv(s,unused,p)
-int s;
-void *unused;
-void *p;
-{
+discserv(
+int s,
+void *unused,
+void *p
+){
 	struct mbuf *bp;
 
 	sockowner(s,Curproc);
@@ -71,40 +61,34 @@ void *p;
 }
 /* Stop discard server */
 int
-dis0(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
+dis0(
+int argc,
+char *argv[],
+void *p
+){
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_DISCARD;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_DISCARD : atoi(argv[1]);
 	return stop_tcp(port);
 }
 /* Start up TCP echo server */
 int
-echo1(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
+echo1(
+int argc,
+char *argv[],
+void *p
+){
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_ECHO;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_ECHO : atoi(argv[1]);
 	return start_tcp(port,"Echo Server",echoserv,512);
 }
 static void
-echoserv(s,unused,p)
-int s;
-void *unused;
-void *p;
-{
+echoserv(
+int s,
+void *unused,
+void *p
+){
 	struct mbuf *bp;
 
 	sockowner(s,Curproc);
@@ -118,141 +102,24 @@ void *p;
 }
 /* stop echo server */
 int
-echo0(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
+echo0(
+int argc,
+char *argv[],
+void *p
+){
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_ECHO;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_ECHO : atoi(argv[1]);
 	return stop_tcp(port);
 }
-/* Start remote exit/reboot server */
-int
-rem1(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	struct sockaddr_in lsocket,fsock;
-	int i;
-	int command;
-	struct mbuf *bp;
-	int32 addr;
-	int (*kp)(int32);
 
-	if(Rem != -1){
-		return 0;
-	}
-	ksignal(Curproc,0);
-	chname(Curproc,"Remote listener");
-	lsocket.sin_family = AF_INET;
-	lsocket.sin_addr.s_addr = INADDR_ANY;
-	if(argc < 2)
-		lsocket.sin_port = IPPORT_REMOTE;
-	else
-		lsocket.sin_port = atoi(argv[1]);
-	
-	Rem = socket(AF_INET,SOCK_DGRAM,0);
-	bind(Rem,(struct sockaddr *)&lsocket,sizeof(lsocket));
-	for(;;){
-		i = sizeof(fsock);
-		if(recv_mbuf(Rem,&bp,0,(struct sockaddr *)&fsock,&i) == -1)
-			break;
-		command = PULLCHAR(&bp);
-
-		switch(command){
-#ifdef	MSDOS	/* Only present on PCs running MSDOS */
-		case SYS_RESET:
-			i = chkrpass(bp);
-			logmsg(Rem,"%s - Remote reset %s",
-			 psocket((struct sockaddr *)&fsock),
-			 i == 0 ? "PASSWORD FAIL" : "" );
-			if(i != 0){
-				iostop();
-				sysreset();	/* No return */
-			}
-			break;
-#endif
-		case SYS_EXIT:
-			i = chkrpass(bp);
-			logmsg(Rem,"%s - Remote exit %s",
-			 psocket((struct sockaddr *)&fsock),
-			 i == 0 ? "PASSWORD FAIL" : "" );
-			if(i != 0){
-				iostop();
-				exit(0);
-			}
-			break;
-		case KICK_ME:
-			if(len_p(bp) >= sizeof(int32))
-				addr = pull32(&bp);
-			else
-				addr = fsock.sin_addr.s_addr;
-			for(i=0;(kp = Kicklist[i]) != NULL;i++)
-				(*kp)(addr);
-			break;
-		}
-		free_p(&bp);
-	}
-	close_s(Rem);
-	Rem = -1;
-	return 0;
-}
-/* Check remote password */
-static int
-chkrpass(bp)
-struct mbuf *bp;
-{
-	char *lbuf;
-	uint16 len;
-	int rval = 0;
-
-	len = len_p(bp);
-	if(strlen(Rempass) != len)
-		return rval;
-	lbuf = mallocw(len);
-	pullup(&bp,lbuf,len);
-	if(strncmp(Rempass,lbuf,len) == 0)
-		rval = 1;
-	free(lbuf);
-	return rval;
-}
-int
-rem0(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	close_s(Rem);
-	return 0;
-}
-
-/* Start up TCP term server */
-int
-term1(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
-
-	if(argc < 2)
-		port = IPPORT_TERM;
-	else
-		port = atoi(argv[1]);
-	return start_tcp(port,"Term Server",termserv,576);
-}
+/* Fix this to be command from telnet server */
 static void
-termserv(s,unused,p)
-int s;
-void *unused;
-void *p;
-{
+termserv(
+int s,
+void *unused,
+void *p
+){
 	FILE *network = NULL;
 	FILE *asy;
 	char *buf = NULL;
@@ -271,14 +138,6 @@ void *p;
 
 	if(SETSIG(EABORT)){
 		fprintf(network,"Abort\r\n");
-		goto quit;
-	}
-	/* Prompt for and check remote password */
-	fprintf(network,"Password: ");
-	fgets(buf,BUFSIZ,network);
-	rip(buf);
-	if(strcmp(buf,Rempass) != 0){
-		fprintf(network,"Login incorrect\n");
 		goto quit;
 	}
 	/* Prompt for desired interface. Verify that it exists, that
@@ -342,16 +201,14 @@ void *p;
 		fwrite(buf,1,i,asy);
 quit:	fclose(network);
 	fclose(asy);
-	killproc(rxproc);
+	killproc(&rxproc);
 	logmsg(s,"close term");
 	free(buf);
 	close_s(s);
 	tunregister(ifp,0);
 }
 void
-termrx(s,p1,p2)
-int s;
-void *p1,*p2;
+termrx(int s,void *p1,void *p2)
 {
 	int i;
 	FILE *network = (FILE *)p1;
@@ -365,8 +222,7 @@ void *p1,*p2;
 	}
 }
 void
-tregister(ifp)
-struct iface *ifp;
+tregister(struct iface *ifp)
 {
 	struct tserv *tserv;
 
@@ -377,9 +233,7 @@ struct iface *ifp;
 	Tserv = tserv;
 }
 void
-tunregister(ifp,kill)
-struct iface *ifp;
-int kill;
+tunregister(struct iface *ifp,int kill)
 {
 	struct tserv *tserv;
 	struct tserv *prev = NULL;
@@ -403,100 +257,13 @@ int kill;
 
 /* Stop term server */
 int
-term0(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	uint16 port;
+term0(
+int argc,
+char *argv[],
+void *p
+){
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_TERM;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_TERM : atoi(argv[1]);
 	return stop_tcp(port);
-}
-/* Start BSR server */
-int
-bsr1(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	struct sockaddr_in lsocket,fsock;
-	int i,c;
-	struct mbuf *bp;
-	char *cp;
-	uint8 *dp;
-	FILE *asy;
-
-	if(Bsr != -1)
-		return 1;
-
-	ksignal(Curproc,0);
-	chname(Curproc,"BSR listener");
-
-	if((asy = asyopen(argv[1],"r+b")) == NULL){
-		printf("Can't open interface %s\n",argv[1]);
-		return 1;
-	}
-	/* Set up the UDP socket where we'll take commands */
-	lsocket.sin_family = AF_INET;
-	lsocket.sin_addr.s_addr = INADDR_ANY;
-	if(argc < 3)
-		lsocket.sin_port = IPPORT_BSR;
-	else
-		lsocket.sin_port = atoi(argv[2]);
-	
-	Bsr = socket(AF_INET,SOCK_DGRAM,0);
-	bind(Bsr,(struct sockaddr *)&lsocket,sizeof(lsocket));
-
-	/* Process commands */
-	for(;;){
-		i = sizeof(fsock);
-		if(recv_mbuf(Bsr,&bp,0,(struct sockaddr *)&fsock,&i) == -1)
-			break;
-		/* Check password */
-		for(cp = Rempass;;cp++){
-			c = PULLCHAR(&bp);
-			if(c == -1 || *cp != c)
-				goto endcmd;
-			if(*cp == '\0')
-				break;
-		}
-		/* Send remainder of packet to BSR */
-		while((c = PULLCHAR(&bp)) != -1){
-			fputc(c,asy);
-		}
-		free_p(&bp);	/* Shouldn't be necessary */
-
-		/* Now generate response */
-		bp = ambufw(512);	/* Larger than max response */
-		dp = bp->data;
-		kalarm(500L);	/* Allow BSR time to respond */
-		while((c = fgetc(asy)) != -1){
-			kalarm(100L);	/* Reset timer */
-			*dp++ = c;
-			bp->cnt++;
-		}
-		kalarm(0L);
-		/* Send response */
-		send_mbuf(Bsr,&bp,0,(struct sockaddr *)&fsock,sizeof(fsock));
-endcmd:
-		free_p(&bp);
-	}
-	fclose(asy);
-	close_s(Bsr);
-	Bsr = -1;
-	return 0;
-}
-
-int
-bsr0(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	close_s(Bsr);
-	return 0;
 }

@@ -6,9 +6,9 @@
 #include "slhc.h"
 #include "trace.h"
 
-static uint16 decodeint(struct mbuf **bpp);
+static uint decodeint(struct mbuf **bpp);
 
-static uint16
+static uint
 decodeint(bpp)
 struct mbuf **bpp;
 {

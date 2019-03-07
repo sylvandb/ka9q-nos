@@ -13,12 +13,11 @@ int Net_error;
  * binary IP address
  */
 int32
-aton(s)
-register char *s;
+aton(char *s)
 {
 	int32 n;
 
-	register int i;
+	int i;
 
 	n = 0;
 	if(s == NULL)
@@ -40,8 +39,7 @@ register char *s;
  * string, e.g., 255.255.255.255\0
  */
 char *
-inet_ntoa(a)
-int32 a;
+inet_ntoa(int32 a)
 {
 	static char buf[16];
 
@@ -54,8 +52,7 @@ int32 a;
 }
 /* Convert hex-ascii string to long integer */
 long
-htol(s)
-char *s;
+htol(char *s)
 {
 	long ret;
 	char c;
@@ -76,12 +73,11 @@ char *s;
 	return ret;
 }
 char *
-pinet(s)
-struct socket *s;
+pinet(struct socket *s)
 {
 	static char buf[30];
 
+	memset(buf,0,sizeof(buf));
 	sprintf(buf,"%s:%u",inet_ntoa(s->address),s->port);
 	return buf;
 }
-

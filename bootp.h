@@ -29,8 +29,8 @@ struct bootp {
 	uint8	hlen;			/* hardware addr length */
 	uint8	hops;			/* gateway hops */
 	int32	xid;			/* transaction ID */
-	uint16	secs;			/* seconds since boot began */
-	uint16	unused;
+	uint	secs;			/* seconds since boot began */
+	uint	unused;
 	struct in_addr	ciaddr;		/* client IP address */
 	struct in_addr	yiaddr;		/* 'your' IP address */
 	struct in_addr	siaddr;		/* server IP address */

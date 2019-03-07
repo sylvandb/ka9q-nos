@@ -75,9 +75,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 
-	tcb = (struct tcb *)ltop(htol(argv[1]));
+	tcb = (struct tcb *) htol(argv[1]);
 	if(!tcpval(tcb)){
 		printf(Notval);
 		return 1;
@@ -115,9 +115,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 
-	tcb = (struct tcb *)ltop(htol(argv[1]));
+	tcb = (struct tcb *) htol(argv[1]);
 	if(!tcpval(tcb)){
 		printf(Notval);
 		return 1;
@@ -133,9 +133,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 
-	tcb = (struct tcb *)ltop(htol(argv[1]));
+	tcb = (struct tcb *) htol(argv[1]);
 	if(kick_tcp(tcb) == -1){
 		printf(Notval);
 		return 1;
@@ -150,7 +150,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Tcp_mss,"TCP MSS",argc,argv);
+	return setint(&Tcp_mss,"TCP MSS",argc,argv);
 }
 
 /* Set default window size */
@@ -160,7 +160,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Tcp_window,"TCP window",argc,argv);	
+	return setint(&Tcp_window,"TCP window",argc,argv);	
 }
 
 static int
@@ -180,7 +180,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 	int32 interval = 0;
 
 	if(argc < 2){
@@ -190,7 +190,7 @@ void *p;
 	if(argc > 2)
 		interval = atol(argv[2]);
 
-	tcb = (struct tcb *)ltop(htol(argv[1]));
+	tcb = (struct tcb *) htol(argv[1]);
 	if(!tcpval(tcb)){
 		printf(Notval);
 		return 1;
@@ -224,18 +224,18 @@ void *p2;
 			break;
 	}
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 }
 
 /* Dump TCP stats and summary of all TCBs
-/*     &TCB Rcv-Q Snd-Q  Local socket           Remote socket          State
- *     1234     0     0  xxx.xxx.xxx.xxx:xxxxx  xxx.xxx.xxx.xxx:xxxxx  Established
+/*     &TCB Rcv-Q Snd-Q           Local socket         Remote socket State
+ *     1234     0     0  xxx.xxx.xxx.xxx:xxxxx xxx.xxx.xxx.xxx:xxxxx Established
  */
 static int
 tstat()
 {
-	register int i;
-	register struct tcb *tcb;
+	int i;
+	struct tcb *tcb;
 	int j;
 
 	for(j=i=1;i<=NUMTCPMIB;i++){
@@ -251,12 +251,12 @@ tstat()
 	if((j % 2) == 0)
 		printf("\n");
 
-	printf("&TCB      Rcv-Q Snd-Q  Local socket           Remote socket          State\n");
+	printf("     &TCB Rcv-Q Snd-Q            Local socket         Remote socket State\n");
 	for(tcb=Tcbs;tcb != NULL;tcb = tcb->next){
 		printf("%9p%6u%6u  ",tcb,tcb->rcvcnt,tcb->sndcnt);
-		printf("%-23s",pinet(&tcb->conn.local));
-		printf("%-23s",pinet(&tcb->conn.remote));
-		printf("%-s",Tcpstates[tcb->state]);
+		printf("%22s",pinet(&tcb->conn.local));
+		printf("%22s",pinet(&tcb->conn.remote));
+		printf(" %s",Tcpstates[tcb->state]);
 		if(tcb->state == TCP_LISTEN && tcb->flags.clone)
 			printf(" (S)");
 		printf("\n");
@@ -269,6 +269,7 @@ st_tcp(tcb)
 struct tcb *tcb;
 {
 	int32 sent,recvd;
+	int32 txbw,rxbw;
 
 	if(tcb == NULL)
 		return;
@@ -304,22 +305,30 @@ struct tcb *tcb;
 		recvd -= 2;
 		break;
 	}
+	if(tcb->outrate != 0)
+		txbw = 1000L * tcb->outlen / tcb->outrate;
+	else
+		txbw = 0;
+	if(tcb->inrate != 0)
+		rxbw = 1000L * tcb->inlen / tcb->inrate;
+	else
+		rxbw = 0;
 	printf("Local: %s",pinet(&tcb->conn.local));
 	printf(" Remote: %s",pinet(&tcb->conn.remote));
 	printf(" State: %s\n",Tcpstates[tcb->state]);
 	printf("         Unack     Next Resent CWind Thrsh  Wind  MSS Queue  Thruput      Total\n");
 	printf("Send: %08lx %08lx%7lu%6lu%6lu%6lu%5lu%6lu%9lu%11lu\n",
 	 tcb->snd.una,tcb->snd.nxt,tcb->resent,tcb->cwind,tcb->ssthresh,
-	 tcb->snd.wnd,tcb->mss,tcb->sndcnt,tcb->txbw,sent);
+	 tcb->snd.wnd,tcb->mss,tcb->sndcnt,txbw,sent);
 
 	printf("Recv:          %08lx%7lu            %6lu     %6lu%9lu%11lu\n",
-	 tcb->rcv.nxt,tcb->rerecv,tcb->rcv.wnd,tcb->rcvcnt,tcb->rxbw,recvd);
+	 tcb->rcv.nxt,tcb->rerecv,tcb->rcv.wnd,tcb->rcvcnt,rxbw,recvd);
 
 	printf("Dup acks   Backoff   Timeouts   Source Quench   Unreachables   Power\n");
 	printf("%8u%10u%11lu%16lu%15lu",tcb->dupacks,tcb->backoff,tcb->timeouts,
 	 tcb->quench,tcb->unreach);
 	if(tcb->srtt != 0)
-		printf("%8lu",1000*tcb->txbw/tcb->srtt);
+		printf("%8lu",1000*txbw/tcb->srtt);
 	else
 		printf("     INF");
 	if(tcb->flags.retran)
@@ -343,7 +352,7 @@ struct tcb *tcb;
 	printf("   %s\n",tcb->flags.ts_ok ? "timestamps":"standard");
 
 	if(tcb->reseq != (struct reseq *)NULL){
-		register struct reseq *rp;
+		struct reseq *rp;
 
 		printf("Reassembly queue:\n");
 		for(rp = tcb->reseq;rp != (struct reseq *)NULL; rp = rp->next){

@@ -1,3 +1,4 @@
+#include <errno.h>
 #include "global.h"
 #include "udp.h"
 #include "socket.h"
@@ -119,12 +120,11 @@ int rtx;
 	return len;
 }
 int
-so_udp_close(up)
-struct usock *up;
+so_udp_close(struct usock *up)
 {
-	if(up->cb.udp != NULL){
-		del_udp(up->cb.udp);
-	}
+	if(up->cb.udp != NULL)
+		del_udp(&up->cb.udp);
+
 	return 0;
 }
 int

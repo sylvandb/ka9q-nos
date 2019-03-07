@@ -23,7 +23,7 @@ struct ftpcli {
 #define	SENDING_STATE	1	/* Sending data to user */
 #define	RECEIVING_STATE	2	/* Storing data from user */
 
-	uint16 verbose;		/* Transfer verbosity level */
+	uint verbose;		/* Transfer verbosity level */
 	int batch;		/* Command batching flag */
 	int abort;		/* Aborted transfer flag */
 	int update;		/* Compare with MD5 during mput/mget */

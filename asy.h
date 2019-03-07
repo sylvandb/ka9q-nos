@@ -29,7 +29,7 @@ extern struct asymode Asymode[];
 
 /* In n8250.c: */
 int asy_init(int dev,struct iface *ifp,int base,int irq,
-	uint16 bufsize,int trigchar,long speed,int cts,int rlsd,int chain);
+	uint bufsize,int trigchar,long speed,int cts,int rlsd,int chain);
 int32 asy_ioctl(struct iface *ifp,int cmd,int set,int32 val);
 int asy_read(int dev,void *buf,unsigned short cnt);
 int asy_open(char *name);
@@ -37,7 +37,7 @@ int asy_close(int dev);
 int asy_speed(int dev,long bps);
 int asy_send(int dev,struct mbuf **bpp);
 int asy_stop(struct iface *ifp);
-int asy_write(int dev,void *buf,unsigned short cnt);
+int asy_write(int dev,const void *buf,unsigned short cnt);
 int get_rlsd_asy(int dev, int new_rlsd);
 int get_asy(int dev);
 void fp_stop(void);

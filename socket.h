@@ -107,7 +107,7 @@ int socketpair(int af,int type,int protocol,int sv[]);
 void flushsocks(void);
 int recv(int s,void *buf,int len,int flags);
 int recvfrom(int s,void *buf,int len,int flags,struct sockaddr *from,int *fromlen);
-int send(int s,void *buf,int len,int flags);
+int send(int s,const void *buf,int len,int flags);
 int sendto(int s,void *buf,int len,int flags,struct sockaddr *to,int tolen);
 
 /* In file sockutil.c: */
@@ -116,7 +116,7 @@ char *sockerr(int s);
 char *sockstate(int s);
 
 /* In file tcpsock.c: */
-int start_tcp(uint16 port,char *name,void (*task)(),int stack);
-int stop_tcp(uint16 port);
+int start_tcp(uint port,char *name,void (*task)(),int stack);
+int stop_tcp(uint port);
 
 #endif	/* _SOCKET_H */

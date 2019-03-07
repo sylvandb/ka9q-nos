@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "usock.h"
@@ -28,7 +29,7 @@
 #include "hardware.h"
 
 #define HOPMAXQUERY	5		/* Max# queries each TTL value */
-static uint16 Hoprport = 32768+666;	/* funny port for udp probes */
+static uint Hoprport = 32768+666;	/* funny port for udp probes */
 #define HOP_HIGHBIT	32768		/* Mask to check ICMP msgs */
 
 
@@ -47,7 +48,7 @@ static int hopcheck(int argc,char *argv[],void *p);
 static int hopttl(int argc,char *argv[],void *p);
 static int hokwait(int argc,char *argv[],void *p);
 static int hopnum(int argc,char *argv[],void *p);
-static int geticmp(int s,uint16 lport,uint16 fport,
+static int geticmp(int s,uint lport,uint fport,
 	int32 *sender,char *type,char *code);
 static int keychar(int c);
 
@@ -79,9 +80,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 r;
-	uint16 x = Hopquery;
-	r = setshort(&x,"# queries each attempt",argc,argv);
+	uint r;
+	uint x = Hopquery;
+	r = setint(&x,"# queries each attempt",argc,argv);
 	if ((x <= 0)||(x > HOPMAXQUERY)) {
 		printf("Must be  0 < x <= %d\n",HOPMAXQUERY);
 		return 0;
@@ -108,9 +109,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 r;
-	uint16 x = Hopmaxttl;
-	r = setshort(&x,"Max attempts to reach host",argc,argv);
+	uint r;
+	uint x = Hopmaxttl;
+	r = setint(&x,"Max attempts to reach host",argc,argv);
 	if ((x <= 0)||(x > 255)) {
 		printf("Must be  0 < x <= 255\n");
 		return 0;
@@ -126,9 +127,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 r;
-	uint16 x = Hopmaxwait;
-	r = setshort(&x,"# secs to wait for reply to query",argc,argv);
+	uint r;
+	uint x = Hopmaxwait;
+	r = setint(&x,"# secs to wait for reply to query",argc,argv);
 	if (x <= 0) {
 		printf("Must be >= 0\n");
 		return 0;
@@ -156,8 +157,8 @@ void *p;
 	char iccode;			/* ICMP code last ICMP reply */
 	int32 lastaddr;			/* Sender of previous ICMP reply */
 	struct sockaddr_in sock;
-	register struct usock *usp;
-	register struct sockaddr_in *sinp;
+	struct usock *usp;
+	struct sockaddr_in *sinp;
 	unsigned char sndttl, q;
 	int tracedone = 0;
 	int ilookup = 1;		/* Control of inverse domain lookup */
@@ -192,7 +193,7 @@ void *p;
 	if((sock.sin_addr.s_addr = resolve(hostname)) == 0){
 		printf("unknown\n",hostname);
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 
@@ -201,20 +202,20 @@ void *p;
 	if((s = socket(AF_INET,SOCK_DGRAM,0)) == -1){
 		printf("Can't create udp socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	if(connect(s,(struct sockaddr *)&sock,sizeof(sock)) == -1){
 		printf("Connect failed\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	if((s1 = socket(AF_INET,SOCK_RAW,ICMP_PTCL)) == -1){
 		printf("Can't create raw socket\n");
 		keywait(NULL,1);
 		close(s);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("\n");
@@ -287,7 +288,7 @@ void *p;
 						}
 					}
 					got_name: ;
-					free_rr(save_rrlp);
+					free_rr(&save_rrlp);
 
 				}
 				lastaddr = icsource;
@@ -373,7 +374,7 @@ done:	close(s);
 		logmsg(s,"HOPCHECK to %s done",sp->name);
 #endif
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 
@@ -396,8 +397,8 @@ int c;
 static int
 geticmp(s,lport,fport,sender,type,code)
 int s;
-uint16 lport;
-uint16 fport;
+uint lport;
+uint fport;
 int32 *sender;
 char *type,*code;
 {

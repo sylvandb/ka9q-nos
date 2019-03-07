@@ -42,7 +42,7 @@ struct config_hdr {
 #define QUALITY_REPORT	12
 
 	byte_t id;
-	uint16 len;
+	uint len;
 };
 #define CONFIG_HDR_LEN	4	/* Length of config packet header */
 
@@ -68,8 +68,8 @@ struct fsm_s;		/* forward declaration */
 /* Protocol Constants needed by State Machine */
 struct fsm_constant_s {
 	char *name;			/* Name of protocol */
-	uint16 protocol;			/* Protocol number */
-	uint16 recognize;		/* Config codes to use (bits) */
+	uint protocol;			/* Protocol number */
+	uint recognize;		/* Config codes to use (bits) */
 
 	byte_t fsmi;			/* Finite State Machine index */
 	byte_t try_req;			/* # tries for request */
@@ -174,18 +174,18 @@ struct ppp_s {
 
 	int32 OutTxOctetCount;		/* # octets sent */
 	int32 OutOpenFlag;		/* # of open flags sent */
-	uint16 OutNCP[fsmi_Size];	/* # NCP packets sent by protocol */
-	uint16 OutError;			/* # packets with error on send */
-	uint16 OutMemory;		/* # alloc failures on send */
+	uint OutNCP[fsmi_Size];	/* # NCP packets sent by protocol */
+	uint OutError;			/* # packets with error on send */
+	uint OutMemory;		/* # alloc failures on send */
 
 	int32 InRxOctetCount;		/* # octets received */
 	int32 InOpenFlag;		/* # of open flags */
-	uint16 InNCP[fsmi_Size];		/* # NCP packets by protocol */
-	uint16 InUnknown;		/* # unknown packets received */
-	uint16 InChecksum;		/* # packets with bad checksum */
-	uint16 InFrame;			/* # packets with frame error */
-	uint16 InError;			/* # packets with other error */
-	uint16 InMemory; 		/* # alloc failures */
+	uint InNCP[fsmi_Size];		/* # NCP packets by protocol */
+	uint InUnknown;		/* # unknown packets received */
+	uint InChecksum;		/* # packets with bad checksum */
+	uint InFrame;			/* # packets with frame error */
+	uint InError;			/* # packets with other error */
+	uint InMemory; 		/* # alloc failures */
 };
 
 extern char *fsmStates[];

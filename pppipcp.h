@@ -12,15 +12,15 @@
 
 /* Table for IPCP configuration requests */
 struct ipcp_value_s {
-	uint16 negotiate;		/* negotiation flags */
+	uint negotiate;		/* negotiation flags */
 #define IPCP_N_ADDRESS		(1 << IPCP_ADDRESS)
 #define IPCP_N_COMPRESS		(1 << IPCP_COMPRESS)
 
 	int32 address;			/* address for this side */
 	int32 other;			/* address for other side */
 
-	uint16 compression;		/* Compression protocol */
-	uint16 slots;			/* Slots (0-n)*/
+	uint compression;		/* Compression protocol */
+	uint slots;			/* Slots (0-n)*/
 	byte_t slot_compress;		/* Slots may be compressed (flag)*/
 };
 
@@ -30,7 +30,7 @@ struct ipcp_value_s {
 #define IPCP_SLOT_COMPRESS	0x01	/* May compress slot id */
 
 struct ipcp_side_s {
-	uint16 will_negotiate;
+	uint will_negotiate;
 	struct ipcp_value_s want;
 	struct ipcp_value_s work;
 };

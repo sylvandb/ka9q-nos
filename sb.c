@@ -8,10 +8,36 @@
 #include "mbuf.h"
 #include "dma.h"
 #include "sb.h"
-#include "npc.h"
+#include "nospc.h"
 #include "socket.h"
 #include "cmdparse.h"
 #include "netuser.h"
+
+struct gain {
+	char *name;
+	int regl;
+	int regr;
+	double scale;
+	double offset;
+};
+struct sbdriver {
+	int irq,dma8,dma16;
+
+	enum { IDLE, DAC, ADC } state;
+
+	int32 dmabuf;	/* Physical base of DMA buffer */
+	int selector;	/* Protected mode selector of DMA buffer */
+	int dmasize;	/* Size of DMA buffer */
+
+	int32 ioptr;	/* Physical I/O pointer into DMA buffer */
+	volatile int bufcnt;	/* Count of bytes in DMA buffer */
+	int base;	/* Base register address */
+	volatile int pause;	/* Paused due to data underflow */
+	long samprate;
+	int stereo;
+	long stuffsamples;
+	long interrupts;
+} Sb;
 
 static int sb_read_data(int base);
 static int sb_reset(int base);
@@ -24,51 +50,14 @@ static int sb_read_mix(int base,int reg);
 static int sb_write_mix(int base,int reg,int data);
 static void dumpgains(int);
 static void dumpgain(int,struct gain *);
-static int sb_adc(long,int,int);
-static int sb_dac(long,int,int);
-static int sb_idle(void);
-int sb_calibrate(long);
-static void sb_outstart(struct mbuf **bpp);
-int sb_send(struct mbuf *bp);
 unsigned short pull16le(struct mbuf **bpp);
-
-INTERRUPT sb0vec(int dev);
-static INTERRUPT (*Sbhandle[])() = { sb0vec };
-INTERRUPT (*Savevec)(void);
-
-struct sbdriver {
-	int irq,dma8,dma16;
-
-	enum { IDLE, DAC, ADC } state;
-	struct mbuf *sndq;
-	struct mbuf *rcvq;
-
-	uint8 *dmabuf;	/* Base of DMA buffer */
-	int32 physaddr;	/* Physical address of DMA buffer */
-	int dmasize;	/* Size of DMA buffer */
-
-	uint8 *ioptr;	/* Write pointer into DMA buffer */
-	int bufcnt;	/* Count of bytes in DMA buffer */
-	int base;	/* Base register address */
-	int pause;	/* Paused due to data underflow */
-	long samprate;
-	int stereo;
-	long stuffsamples;
-} Sb;
-
+void sbhandle(int dev);
 
 int S = -1;
 
 int dosbatt(),dosbdet(),dogain(),dossend(),dosamprate(),dostereo();
 int dosbcal(),dosbidle(),dostcplisten(),dostatus();
 
-struct gain {
-	char *name;
-	int regl;
-	int regr;
-	double scale;
-	double offset;
-};
 struct gain Gaintab[] = {
 	"master",	SB_MV,		SB_MV+1,	4, -62,
 	"dac",		SB_DAC,		SB_DAC+1,	4, -62,
@@ -122,21 +111,16 @@ void *p;
 		printf(" Stereo;");
 	else
 		printf(" Mono;");
+	printf(" Interrupts: %lu",Sb.interrupts);
 	switch(Sb.state){
 	case IDLE:
 		printf(" Idle\n");
 		break;
 	case ADC:
-		disable();
-		i = len_q(Sb.rcvq);
-		enable();
-		printf(" A/D: %u buffers\n",i);
+		printf(" A/D\n");
 		break;
 	case DAC:
-		disable();
-		i = len_p(Sb.sndq);
-		enable();
-		printf(" D/A: %u bytes; inserted bytes %lu",i+Sb.bufcnt,Sb.stuffsamples);
+		printf(" D/A: %d bytes; ",Sb.bufcnt);
 		if(Sb.pause)
 			printf(" Paused");
 		printf("\n");
@@ -196,14 +180,16 @@ void *p;
 	return 0;
 }
 void
-sbshut()
+sbshut(void)
 {
 	if(Sb.base == 0)
 		return;	/* No card attached */
-	setirq(Sb.irq,Savevec);
 	maskoff(Sb.irq);
+	freevect(Sb.irq);
 	sb_reset(Sb.base);
 	Sb.base = 0;
+	__dpmi_free_dos_memory(Sb.selector);
+	Sb.dmabuf = 0;
 	shutdown(S,2);	/* Blow it away */
 	S = -1;
 }
@@ -296,7 +282,7 @@ void *p1,*p2;
 	struct mbuf *bp;
 
 	while(recv_mbuf(s,&bp,0,NULL,NULL) > 0)
-		sb_send(bp);
+		sb_send(&bp);
 	close(s);
 }
 
@@ -322,10 +308,7 @@ void *p;
 
 	s = socket(AF_INET,SOCK_DGRAM,0);
 	sock.sin_family = AF_INET;
-	if(argc > 2)
-		sock.sin_port = atoi(argv[2]);
-	else
-		sock.sin_port = 2010;
+	sock.sin_port = (argc > 2) ? atoi(argv[2]) : 2010;
 	sock.sin_addr.s_addr = resolve(argv[1]);
 	if(connect(s,(struct sockaddr *)&sock,sizeof(sock)) == -1){
 		printf("Connect failed\n");
@@ -337,11 +320,7 @@ void *p;
 		return 1;
 	}
 	for(;;){
-		while(Sb.rcvq == NULL && Sb.state == ADC)
-			kwait(&Sb.rcvq);
-		if(Sb.state == IDLE)
-			break;
-		bp = dequeue(&Sb.rcvq);
+		bp = sb_recv();
 		pushdown(&bp,NULL,4);
 		put32(bp->data,seq);
 		seq += len_p(bp) - 4;
@@ -363,10 +342,8 @@ int dma16;
 		printf("Soundblaster reset failed\n");
 		return -1;
 	}
-	/* Save original interrupt vector */
-	Savevec = getirq(irq);
 	/* Set new interrupt vector */
-	if(setirq(irq,Sbhandle[0]) == -1){
+	if(setvect(irq,0,sbhandle,0) == -1){
 		printf("IRQ %u out of range\n",irq);
 		return -1;
 	}
@@ -420,13 +397,13 @@ int bufsiz;	/* Size of mbufs to be generated (1/2 DMA buffer) */
 		return -1;
 	}
 	/* Allocate DMA buffer */
-	if((Sb.ioptr = Sb.dmabuf = dma_malloc(&Sb.physaddr,2*bufsiz)) == NULL){
+	if((Sb.ioptr = Sb.dmabuf = dma_malloc(&Sb.selector,2*bufsiz,1)) == NULL){
 		printf("Can't alloc dma buffer\n");
 		return -1;
 	}
 	Sb.state = ADC;
 	Sb.dmasize = 2*bufsiz;
-	setup_dma(Sb.dma16,Sb.physaddr,Sb.dmasize,0x54);
+	setup_dma(Sb.dma16,Sb.dmabuf,Sb.dmasize,0x54);
 
 	/* Set sampling rate */
 	sb_write_byte(Sb.base,0x42);
@@ -457,7 +434,7 @@ int bufsiz;	/* Size of buffer unit (1/2 DMA buffer) */
 		return -1;
 	}
 	/* Allocate DMA buffer */
-	if((Sb.ioptr = Sb.dmabuf = dma_malloc(&Sb.physaddr,2*bufsiz)) == NULL){
+	if((Sb.ioptr = Sb.dmabuf = dma_malloc(&Sb.selector,2*bufsiz,1)) == 0){
 		printf("Can't alloc dma buffer\n");
 		return -1;
 	}
@@ -465,10 +442,16 @@ int bufsiz;	/* Size of buffer unit (1/2 DMA buffer) */
 	Sb.dmasize = 2*bufsiz;
 	Sb.stuffsamples = 0;
 	Sb.bufcnt = 0;
-	memset(Sb.dmabuf,0,Sb.dmasize);
-	
+	{
+		char *buf;
+
+		buf = malloc(Sb.dmasize);
+		memset(buf,0,Sb.dmasize);	
+		dosmemput(buf,Sb.dmasize,Sb.dmabuf);
+		free(buf);
+	}
 	sb_write_byte(Sb.base,0xd1);	/* spkr on */
-	setup_dma(Sb.dma16,Sb.physaddr,Sb.dmasize,0x58);
+	setup_dma(Sb.dma16,Sb.dmabuf,Sb.dmasize,0x58);
 
 	/* Set up sampling rate */
 	sb_write_byte(Sb.base,0x41);
@@ -487,35 +470,129 @@ int bufsiz;	/* Size of buffer unit (1/2 DMA buffer) */
 }
 /* Return soundblaster to idle condition */
 int
-sb_idle()
+sb_idle(void)
 {
+	int cnt;
+
 	switch(Sb.state){
 	case IDLE:
 		return 0;	/* Already idle */		
-	case DAC:		/* Wait for output queue to drain */
-	case ADC:
+	case DAC:
+		/* Wait for output queue to drain to below one buffer */
+		disable();
+		while(Sb.bufcnt >= Sb.dmasize/2)
+			kwait(&Sb);
+
+		/* If an incomplete buffer remains, pad it out */ 
+		cnt = Sb.bufcnt;
+		enable();
+		if(cnt > 0){
+			struct mbuf *bp;
+
+			bp = ambufw(Sb.dmasize/2 - cnt);
+			bp->cnt = Sb.dmasize/2 - cnt;
+			memset(bp->data,0,bp->cnt);
+			sb_send(&bp);
+		}	
+		disable();
+		while(!Sb.pause)
+			kwait(&Sb);
+		enable();
+	case ADC:	/* note fall-thru */
 		/* stop conversion */
 		sb_write_byte(Sb.base,0xd9);
 		break;
 	}
+	Sb.bufcnt = 0;
 	Sb.state = IDLE;
 	kwait(NULL);
 	/* Ought to wait for last interrupt here */
-	free_q(&Sb.sndq);
-	free_q(&Sb.rcvq);
 	dma_disable(Sb.dma16);
-	dmaunlock(Sb.physaddr,Sb.dmasize);
-	free(Sb.dmabuf);
-	Sb.dmabuf = NULL;
-	Sb.physaddr = 0;
+	__dpmi_free_dos_memory(Sb.selector);
+	Sb.dmabuf = 0;
 
 	return 0;
+}
+/* Send buffer to the DAC, starting it if it was paused, and blocking as
+ * needed
+ */
+int
+sb_send(struct mbuf **bpp)
+{
+	int cnt;
+
+	if(bpp == NULL || Sb.state != DAC)
+		return -1;
+
+	while(*bpp != NULL){
+		/* Wait for space to open up in DMA buffer */
+		disable();
+		while(Sb.bufcnt >= Sb.dmasize)
+			kwait(&Sb);
+		cnt = Sb.dmasize-Sb.bufcnt;
+		enable();
+
+		/* In this round, we transfer the lesser of:
+		 * -the available space in the DMA buffer
+		 * -the data remaining in this packet
+		 * -the free space in the high end of the DMA buffer
+		 */
+		cnt = min(cnt,(*bpp)->cnt);
+		cnt = min(cnt,Sb.dmabuf+Sb.dmasize-Sb.ioptr);
+		if(cnt == 0)
+			break;	/* Nothing more to do */
+
+		dosmemput((*bpp)->data,cnt,Sb.ioptr);
+
+		disable();
+		Sb.bufcnt += cnt;	/* Add to bytes in buffer */
+		/* Resume output if there's now at least one full buffer */
+		if(Sb.pause && Sb.bufcnt >= Sb.dmasize/2){
+			Sb.pause = 0;
+			sb_write_byte(Sb.base,0xd6);
+		}
+		enable();
+
+		(*bpp)->data += cnt;
+		(*bpp)->cnt -= cnt;
+		if((*bpp)->cnt == 0)
+			free_mbuf(bpp);
+
+		/* Increment pointer, wrap around if necessary */
+		Sb.ioptr += cnt;
+		if(Sb.ioptr >= Sb.dmabuf + Sb.dmasize)
+			Sb.ioptr -= Sb.dmasize;
+	}
+	return 0;
+}
+/* Read a buffer from the A/D, blocking if necessary */
+struct mbuf *
+sb_recv(void)
+{
+	struct mbuf *bp;
+	int i;
+
+	if(Sb.state != ADC)
+		return NULL;	/* Not in A/D mode */
+
+	while((i = Sb.bufcnt) == 0)
+		kwait(&Sb);
+
+	bp = alloc_mbuf(i);
+	dosmemget(Sb.ioptr,i,bp->data);
+	bp->cnt = i;
+	Sb.ioptr += i;
+	if(Sb.ioptr >= Sb.dmabuf + Sb.dmasize)
+		Sb.ioptr -= Sb.dmasize;
+	disable();
+	Sb.bufcnt -= i;
+	enable();
+	return bp;
 }
 
 /* Reset Soundblaster card */
 static int
-sb_reset(base)
-int base;
+sb_reset(int base)
 {
 	unsigned int i;
 
@@ -533,8 +610,7 @@ int base;
 }
 /* Wait for read data to become available, then read it. Return -1 on timeout */
 static int
-sb_read_data(base)
-int base;
+sb_read_data(int base)
 {
 	unsigned int i;
 
@@ -549,8 +625,7 @@ int base;
 
 /* Write data byte to soundblaster when it's ready. return 0 normally, -1 on err */
 static int
-sb_write_byte(base,data)
-int base,data;
+sb_write_byte(int base, int data)
 {
 	int i;
 
@@ -565,9 +640,7 @@ int base,data;
 }
 /* Write 16-bit word in big-endian order */
 static int
-sb_write_word_be(base,data)
-int base;
-short data;
+sb_write_word_be(int base,int data)
 {
 	sb_write_byte(base,data >> 8);
 	sb_write_byte(base,data);
@@ -575,9 +648,7 @@ short data;
 }
 /* Write 16-bit word in little-endian order */
 static int
-sb_write_word_le(base,data)
-int base;
-short data;
+sb_write_word_le(int base,int data)
 {
 	sb_write_byte(base,data);
 	sb_write_byte(base,data >> 8);
@@ -585,8 +656,7 @@ short data;
 }
 /* Read the mixer */
 static int
-sb_read_mix(base,reg)
-int base,reg;
+sb_read_mix(int base,int reg)
 {
 	outportb(base+SB_MIX_INDEX,reg);
 	return inportb(base+SB_MIX_DATA);
@@ -594,8 +664,7 @@ int base,reg;
 
 /* Write data to soundblaster when it's ready. return 0 normally, -1 on err */
 static int
-sb_write_mix(base,reg,data)
-int base,reg,data;
+sb_write_mix(int base,int reg,int data)
 {
 	outportb(base+SB_MIX_INDEX,reg);
 	outportb(base+SB_MIX_DATA,data);
@@ -615,12 +684,13 @@ void *p;
 }
 
 /* Find DC offsets of each channel */
-sb_calibrate(rate)
-long rate;
+sb_calibrate(long rate)
 {
 	long leftavg,rightavg;
 	uint8 omixl,omixr;
 	long samples;
+	struct mbuf *bp;
+	uint left,right;
 
 	/* Save previous mixer state,
 	 * then turn everything off
@@ -630,28 +700,25 @@ long rate;
 	sb_write_mix(Sb.base,SB_INMIXL,0);		/* All inputs off */
 	sb_write_mix(Sb.base,SB_INMIXR,0);
 
-	/* Collect a second of samples */
+	/* Collect and analyze some data */
 	sb_adc(rate,1,TXBUF);
-	ppause(1000L);
-	sb_idle();
-
-	/* Restore previous mixer switches */
-	sb_write_mix(Sb.base,SB_INMIXL,omixl);
-	sb_write_mix(Sb.base,SB_INMIXR,omixr);
-
-	/* Analyze the data */
 	leftavg = rightavg = 0;
 	samples = 0;
-	while(Sb.rcvq != NULL){
-		uint16 left,right;
 
-		left = pull16le(&Sb.rcvq);
-		right = pull16le(&Sb.rcvq);
+	bp = sb_recv();
+	while(bp != NULL){
+		left = pull16le(&bp);
+		right = pull16le(&bp);
 
 		leftavg += left;
 		rightavg += right;		
 		samples++;
 	}
+	sb_idle();
+	/* Restore previous mixer switches */
+	sb_write_mix(Sb.base,SB_INMIXL,omixl);
+	sb_write_mix(Sb.base,SB_INMIXR,omixr);
+
 	leftavg /= samples;
 	rightavg /= samples;
 	printf("Left channel avg: %ld Right channel avg: %ld\n",
@@ -660,104 +727,45 @@ long rate;
 	return 0;
 }
 unsigned short
-pull16le(bpp)
-struct mbuf **bpp;
+pull16le(struct mbuf **bpp)
 {
-	uint16 x;
+	uint x;
 
 	x = pull16(bpp);
 	return (x >> 8) | (x << 8);
 }
-/* Copy as much of the buffer as will fit into the DMA buffer and start
- * the DAC if it was paused
- */
-void
-sb_outstart(bpp)
-struct mbuf **bpp;
-{
-	int cnt;
-	int istate;
-
-	istate = dirps();
-	/* Copy as much send queue data as we can into the DMA buffer */
-	while(Sb.bufcnt < Sb.dmasize){
-		cnt = min(Sb.dmasize-Sb.bufcnt,Sb.dmabuf+Sb.dmasize-Sb.ioptr);
-		cnt = pullup(bpp,Sb.ioptr,cnt);
-		if(cnt == 0)
-			break;
-		Sb.ioptr += cnt;
-		if(Sb.ioptr >= Sb.dmabuf + Sb.dmasize)
-			Sb.ioptr = Sb.dmabuf;	/* Write pointer wraparound */
-		Sb.bufcnt += cnt;		/* Add to bytes in buffer */
-	}
-	if(!Sb.pause && Sb.bufcnt != 0 && Sb.bufcnt < Sb.dmasize/2){
-		/* While running, pad out a partial half-buffer with silence */
-		cnt = Sb.dmasize/2 - Sb.bufcnt;
-		memset(Sb.ioptr,0,cnt);
-		Sb.stuffsamples += cnt;
-		Sb.ioptr += cnt;
-		if(Sb.ioptr >= Sb.dmabuf + Sb.dmasize)
-			Sb.ioptr = Sb.dmabuf;	/* Write pointer wraparound */
-		Sb.bufcnt += cnt;
-	} else if(Sb.pause && Sb.bufcnt >= Sb.dmasize/2){
-		/* If paused and there's now at least one full buffer, resume */
-		Sb.pause = 0;
-		sb_write_byte(Sb.base,0xd6);	/* Resume output */
-	}
-	restore(istate);
-}
-/* Send a buffer to the DAC */
-int
-sb_send(bp)
-struct mbuf *bp;
-{
-	if(Sb.state == DAC)
-		sb_outstart(&bp);
-
-	if(bp != NULL){
-		/* Queue remainder */
-		disable();
-		append(&Sb.sndq,&bp);
-		enable();
-	}
-	return 0;
-}
-
 /* Soundblaster interrupt handler */
-INTERRUPT (far *(sbint)(dev))()
-int dev;
+void
+sbhandle(int dev)
 {
 	int i;
-	struct mbuf *bp;
 
+	Sb.interrupts++;
 	i = sb_read_mix(Sb.base,0x82);
 	if(i & 1)	/* 8-bit transfers not used, reset anyway */
 		(void)inportb(Sb.base+0xe);
-	if(i & 2){
+
+	if(i & 2)
 		(void)inportb(Sb.base+0xf);
-		switch(Sb.state){
-		case IDLE:
-			break;
-		case DAC:
-			Sb.bufcnt -= Sb.dmasize/2;	/* Amount sent */
-			sb_outstart(&Sb.sndq);		/* Try to send more */
-			if(Sb.bufcnt == 0){
-				/* buffer empty, pause */
-				Sb.pause = 1;
-				sb_write_byte(Sb.base,0xd5);
-			}
-			break;
-		case ADC:
-			bp = alloc_mbuf(Sb.dmasize/2);
-			memcpy(bp->data,Sb.ioptr,Sb.dmasize/2);
-			bp->cnt = Sb.dmasize/2;
-			Sb.ioptr += bp->cnt;
-			if(Sb.ioptr >= Sb.dmabuf + Sb.dmasize)
-				Sb.ioptr = Sb.dmabuf;
-			enqueue(&Sb.rcvq,&bp);
-			break;
+	else
+		return;
+
+	switch(Sb.state){
+	case IDLE:
+		break;
+	case ADC:
+		if(Sb.bufcnt != Sb.dmasize)
+			Sb.bufcnt += Sb.dmasize/2;
+		ksignal(&Sb,1);
+		break;
+	case DAC:
+		Sb.bufcnt -= Sb.dmasize/2;	/* Amount sent */
+		if(Sb.bufcnt < Sb.dmasize/2){
+			/* buffer not ready, pause */
+			Sb.pause = 1;
+			sb_write_byte(Sb.base,0xd5);
 		}
-		ksignal(&Sb,0);
+		ksignal(&Sb,1);
+		break;
 	}
-	return NULL;
 }

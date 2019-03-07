@@ -18,7 +18,7 @@ htonarc(
 struct arc *arc,
 struct mbuf **bpp
 ){
-	register uint8 *cp;
+	uint8 *cp;
 
 	pushdown(bpp,NULL,ARCLEN);
 
@@ -55,8 +55,8 @@ uint8 *addr;
 /* Convert an ARCnet address from Hex/ASCII to binary */
 int
 garc(out,cp)
-register uint8 *out;
-register char *cp;
+uint8 *out;
+char *cp;
 {
 	*out = htoi(cp);
 	return 0;
@@ -82,7 +82,7 @@ anet_output(
 struct iface *iface,	/* Pointer to interface control block */
 uint8 *dest,		/* Destination ARCnet address */
 uint8 *source,		/* Source ARCnet address */
-uint16 type,		/* Type field */
+uint type,		/* Type field */
 struct mbuf **data	/* Data field */
 ){
 	struct arc ap;

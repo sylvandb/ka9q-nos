@@ -129,10 +129,10 @@ void *p;
 
 /* Dump a list of known routes */
 int
-doroutedump()
+doroutedump(void)
 {
-	register struct nrroute_tab *rp ;
-	register int i, column ;
+	struct nrroute_tab *rp ;
+	int i, column ;
 	char buf[16] ;
 	char *cp ;
 	
@@ -167,9 +167,9 @@ int argc ;
 char *argv[] ;
 void *p;
 {
-	register struct nrroute_tab *rp ;
-	register struct nr_bind *bp ;
-	register struct nrnbr_tab *np ;
+	struct nrroute_tab *rp ;
+	struct nr_bind *bp ;
+	struct nrnbr_tab *np ;
 	uint8 dest[AXALEN] ;
 	char neighbor[AXBUF] ;
 
@@ -199,7 +199,7 @@ void *p;
 /* version.  Return -1 on failure. */
 int
 putalias(to,from,complain)
-register char *to, *from ;
+char *to, *from ;
 int complain ;    
 {
 	int len, i ;
@@ -236,7 +236,7 @@ void *p;
 	uint8 dest[AXALEN] ;
 	unsigned quality ;
 	uint8 neighbor[AXALEN] ;
-	register int i ;
+	int i ;
 	int naddr ;
 
 	/* format alias (putalias prints error message if necessary) */
@@ -286,7 +286,7 @@ char *argv[] ;
 void *p;
 {
 	uint8 dest[AXALEN], neighbor[AXALEN] ;
-	register int i ;
+	int i ;
 
 	/* format destination and neighbor callsigns */
 	if (setcall(dest,argv[1]) == -1) {
@@ -319,7 +319,7 @@ char *argv[] ;
 void *p;
 {
 	int i ;
-	register struct iface *ifp ;
+	struct iface *ifp ;
 
 	if (Nr_iface == NULL) {
 		printf("Attach netrom interface first\n") ;
@@ -362,7 +362,7 @@ int argc ;
 char *argv[] ;
 void *p;
 {
-	register int i ;
+	int i ;
 
 	for (i = 0 ; i < Nr_numiface ; i++)
 		if (!strcmp(Nrifaces[i].iface->name,argv[1]))
@@ -400,7 +400,7 @@ void *p;
 static void
 donodetick()
 {
-	register int i ;
+	int i ;
 
 	for (i = 0 ; i < Nr_numiface ; i++)
 		nr_bcnodes(i) ;
@@ -437,9 +437,9 @@ void *p;
 static void
 doobsotick()
 {
-	register struct nrnbr_tab *np ;
-	register struct nrroute_tab *rp, *rpnext ;
-	register struct nr_bind *bp, *bpnext ;
+	struct nrnbr_tab *np ;
+	struct nrroute_tab *rp, *rpnext ;
+	struct nr_bind *bp, *bpnext ;
 	int i ;
 
 	for (i = 0 ; i < NRNUMCHAINS ; i++) {
@@ -548,7 +548,7 @@ char *argv[] ;
 void *p;
 {
 	uint8 neighbor[AXALEN] ;
-	register int i ;
+	int i ;
 
 	/* format callsign */
 	if (setcall(neighbor,argv[1]) == -1) {
@@ -576,7 +576,7 @@ char *argv[] ;
 void *p;
 {
 	uint8 neighbor[AXALEN] ;
-	register int i ;
+	int i ;
 
 	/* format neighbor callsign */
 	if (setcall(neighbor,argv[1]) == -1) {
@@ -684,7 +684,7 @@ void *p;
 	if((s = socket(AF_NETROM,SOCK_SEQPACKET,0)) == -1){
 		printf("Can't create socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	lsocket.nr_family = AF_NETROM;
@@ -714,7 +714,7 @@ void *p;
 	setvbuf(sp->network,NULL,_IOLBF,BUFSIZ);
 	if(SETSIG(EABORT)){
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	return tel_connect(sp, (struct sockaddr *)&fsocket, sizeof(struct sockaddr_nr));

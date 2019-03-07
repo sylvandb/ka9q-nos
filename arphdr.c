@@ -7,11 +7,10 @@
 
 /* Copy a host format arp structure into mbuf for transmission */
 struct mbuf *
-htonarp(arp)
-register struct arp *arp;
+htonarp(struct arp *arp)
 {
 	struct mbuf *bp;
-	register uint8 *buf;
+	uint8 *buf;
 
 	if(arp == (struct arp *)NULL)
 		return NULL;
@@ -24,10 +23,10 @@ register struct arp *arp;
 	*buf++ = arp->hwalen;
 	*buf++ = arp->pralen;
 	buf = put16(buf,arp->opcode);
-	memcpy(buf,arp->shwaddr,(uint16)arp->hwalen);
+	memcpy(buf,arp->shwaddr,arp->hwalen);
 	buf += arp->hwalen;
 	buf = put32(buf,arp->sprotaddr);
-	memcpy(buf,arp->thwaddr,(uint16)arp->hwalen);
+	memcpy(buf,arp->thwaddr,arp->hwalen);
 	buf += arp->hwalen;
 	buf = put32(buf,arp->tprotaddr);
 
@@ -48,9 +47,9 @@ struct mbuf **bpp
 	arp->hwalen = PULLCHAR(bpp);
 	arp->pralen = PULLCHAR(bpp);
 	arp->opcode = pull16(bpp);
-	pullup(bpp,arp->shwaddr,(uint16)arp->hwalen);
+	pullup(bpp,arp->shwaddr,arp->hwalen);
 	arp->sprotaddr = pull32(bpp);
-	pullup(bpp,arp->thwaddr,(uint16)arp->hwalen);
+	pullup(bpp,arp->thwaddr,arp->hwalen);
 	arp->tprotaddr = pull32(bpp);
 
 	/* Get rid of anything left over */

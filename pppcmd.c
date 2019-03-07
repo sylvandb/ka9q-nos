@@ -26,7 +26,7 @@ static struct iface *ppp_lookup(char *ifname);
 static int doppp_quick(int argc, char *argv[], void *p);
 static int doppp_trace(int argc, char *argv[], void *p);
 
-static int spot(uint16 work,uint16 want,uint16 will,uint16 mask);
+static int spot(uint work,uint want,uint will,uint mask);
 static void genstat(struct ppp_s *ppp_p);
 static void lcpstat(struct fsm_s *fsm_p);
 static void papstat(struct fsm_s *fsm_p);
@@ -83,7 +83,7 @@ static struct iface *
 ppp_lookup(ifname)
 char *ifname;
 {
-	register struct iface *ifp;
+	struct iface *ifp;
 
 	if ((ifp = if_lookup(ifname)) == NULL) {
 		printf("%s: Interface unknown\n",ifname);
@@ -104,7 +104,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp;
+	struct iface *ifp;
 
 	if (argc < 2) {
 		printf( "ppp <iface> required\n" );
@@ -129,7 +129,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct fsm_s *fsm_p = p;
+	struct fsm_s *fsm_p = p;
 
 	fsm_p->flags &= ~(FSM_ACTIVE | FSM_PASSIVE);
 
@@ -144,7 +144,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct fsm_s *fsm_p = p;
+	struct fsm_s *fsm_p = p;
 
 	fsm_p->flags &= ~FSM_ACTIVE;
 	fsm_p->flags |= FSM_PASSIVE;
@@ -160,7 +160,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct fsm_s *fsm_p = p;
+	struct fsm_s *fsm_p = p;
 
 	fsm_p->flags &= ~FSM_PASSIVE;
 	fsm_p->flags |= FSM_ACTIVE;
@@ -178,8 +178,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp = p;
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct iface *ifp = p;
+	struct ppp_s *ppp_p = ifp->edv;
 	struct lcp_s *lcp_p = ppp_p->fsm[Lcp].pdv;
 	struct ipcp_s *ipcp_p = ppp_p->fsm[IPcp].pdv;
 
@@ -206,7 +206,7 @@ void
 ppp_show(ifp)
 struct iface *ifp;
 {
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct ppp_s *ppp_p = ifp->edv;
 
 	genstat(ppp_p);
 	if ( ppp_p->fsm[Lcp].pdv != NULL )
@@ -220,7 +220,7 @@ struct iface *ifp;
 
 static void
 genstat(ppp_p)
-register struct ppp_s *ppp_p;
+struct ppp_s *ppp_p;
 {
 
 	printf("%s", PPPStatus[ppp_p->phase]);
@@ -257,10 +257,10 @@ register struct ppp_s *ppp_p;
 
 static int
 spot(work,want,will,mask)
-uint16 work;
-uint16 want;
-uint16 will;
-uint16 mask;
+uint work;
+uint want;
+uint will;
+uint mask;
 {
 	char blot = ' ';
 	int result = (work & mask);
@@ -280,13 +280,13 @@ struct fsm_s *fsm_p;
 {
 	struct lcp_s *lcp_p = fsm_p->pdv;
 	struct lcp_value_s *localp = &(lcp_p->local.work);
-	uint16  localwork = lcp_p->local.work.negotiate;
-	uint16  localwant = lcp_p->local.want.negotiate;
-	uint16  localwill = lcp_p->local.will_negotiate;
+	uint  localwork = lcp_p->local.work.negotiate;
+	uint  localwant = lcp_p->local.want.negotiate;
+	uint  localwill = lcp_p->local.will_negotiate;
 	struct lcp_value_s *remotep = &(lcp_p->remote.work);
-	uint16  remotework = lcp_p->remote.work.negotiate;
-	uint16  remotewant = lcp_p->remote.want.negotiate;
-	uint16  remotewill = lcp_p->remote.will_negotiate;
+	uint  remotework = lcp_p->remote.work.negotiate;
+	uint  remotewant = lcp_p->remote.want.negotiate;
+	uint  remotewill = lcp_p->remote.will_negotiate;
 
 	printf("LCP %s\n",
 		NCPStatus[fsm_p->state]);
@@ -381,9 +381,9 @@ struct fsm_s *fsm_p;
 {
 	struct ipcp_s *ipcp_p = fsm_p->pdv;
 	struct ipcp_value_s *localp = &(ipcp_p->local.work);
-	uint16  localwork = ipcp_p->local.work.negotiate;
+	uint  localwork = ipcp_p->local.work.negotiate;
 	struct ipcp_value_s *remotep = &(ipcp_p->remote.work);
-	uint16  remotework = ipcp_p->remote.work.negotiate;
+	uint  remotework = ipcp_p->remote.work.negotiate;
 
 	printf("IPCP %s\n",
 		NCPStatus[fsm_p->state]);
@@ -529,8 +529,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp = p;
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct iface *ifp = p;
+	struct ppp_s *ppp_p = ifp->edv;
 	int tracing = ppp_p->trace;
 	int result = setint(&tracing,"PPP tracing",argc,argv);
 

@@ -1,6 +1,6 @@
 /* MD5.C - RSA Data Security, Inc., MD5 message-digest algorithm */
 
-#include <mem.h>
+#include <memory.h>
 
 #ifdef	CPU386
 #pragma inline

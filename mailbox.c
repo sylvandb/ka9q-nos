@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <ctype.h>
+#include <errno.h>
 #ifdef	UNIX
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1230,13 +1231,13 @@ int len;
 			printf("Escape character sent.\n");
 		free(m->startmsg);
 		m->startmsg = NULL;
-		killproc(child);
+		killproc(&child);
 		close_s(s);
 		return 0;
 	}
 	network = fdopen(s,"r+t");
 	/* The user did not type the escape character */
-	killproc(child);
+	killproc(&child);
 	puts("Connected.");
 	
 	if(m->startmsg != NULL){
@@ -1272,7 +1273,7 @@ int len;
 	stop_timer(&gwa->t);
 	free(gwa);
 	fclose(network);
-	killproc(child); /* get rid of the receive process */
+	killproc(&child); /* get rid of the receive process */
 	printf("%c%c%c\n",IAC,WONT,TN_ECHO);
 	return 0;
 }
@@ -1377,7 +1378,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register char *cp;
+	char *cp;
 	int state, i;
 	char *user, *host, *from, *msgid;
 	int userlen = 0, hostlen = 0, fromlen = 0, msgidlen = 0;

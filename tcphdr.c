@@ -20,8 +20,8 @@ struct mbuf **bpp,	/* Data in, packet out */
 int32 ipsrc,		/* For computing header checksum */
 int32 ipdest
 ){
-	uint16 hdrlen;
-	register uint8 *cp;
+	uint hdrlen;
+	uint8 *cp;
 
 	if(bpp == NULL)
 		return;
@@ -97,7 +97,7 @@ struct tcp *tcph,
 struct mbuf **bpp
 ){
 	int hdrlen,i,optlen,kind;
-	register int flags;
+	int flags;
 	uint8 hdrbuf[TCPLEN],*cp;
 	uint8 options[TCP_MAXOPT];
 

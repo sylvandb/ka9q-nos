@@ -19,7 +19,7 @@ static unsigned long Memfail;	/* Count of allocation failures */
 static unsigned long Allocs;	/* Total allocations */
 static unsigned long Frees;	/* Total frees */
 static unsigned long Invalid;	/* Total calls to free with garbage arg */
-static int Memwait;		/* Number of tasks waiting for memory */
+static int Memwait;	/* Number of tasks waiting for memory */
 static unsigned long Yellows;	/* Yellow alert garbage collections */
 static unsigned long Reds;	/* Red alert garbage collections */
 unsigned long Availmem;		/* Heap memory, ABLKSIZE units */
@@ -83,13 +83,12 @@ struct sysblock Sysblock[NSYSBLOCK];
 
 /* Allocate block of 'nb' bytes */
 void *
-malloc(nb)
-size_t nb;
+malloc(size_t nb)
 {
 	int i;
 	int i_state;
-	register HEADER HUGE *p, HUGE *q;
-	register unsigned nu;
+	HEADER HUGE *p, HUGE *q;
+	unsigned nu;
 
 	if(nb == 0)
 		return NULL;
@@ -102,7 +101,7 @@ size_t nb;
 	/* Round up to full block, then add one for header */
 	nu = BTOU(nb);
 
-	i_state = dirps();
+	i_state = disable();
 	/* Initialize heap pointers if necessary */
 	if((q = Allocp) == NULL){
 		Base.s.ptr = Allocp = q = &Base;
@@ -161,10 +160,9 @@ size_t nb;
 }
 /* Get more memory from the system and put it on the heap */
 static HEADER HUGE *
-morecore(nu)
-unsigned nu;
+morecore(unsigned nu)
 {
-	char HUGE *cp;
+	void HUGE *cp;
 	HEADER HUGE *up;
 	unsigned size;
 	unsigned segp;
@@ -176,7 +174,7 @@ unsigned nu;
 	Morecores++;
 	size = nu * ABLKSIZE;
 	/* First try to expand our main memory block */
-	if((int)(cp = (char HUGE *)sbrk(size)) != -1){
+	if((int)(cp = (void HUGE *)sbrk(size)) != -1){
 		up = (HEADER *)cp;
 		up->s.size = nu;
 		up->s.ptr = up;	/* satisfy audit */
@@ -231,10 +229,9 @@ unsigned nu;
 
 /* Put memory block back on heap */
 void
-free(blk)
-void *blk;
+free(void *blk)
 {
-	register HEADER HUGE *p, HUGE *q;
+	HEADER HUGE *p, HUGE *q;
 	unsigned short HUGE *ptr;
 	int i_state;
 	int i;
@@ -250,10 +247,12 @@ void *blk;
 			ptr = (unsigned short *)&blk;
 			printf("free: WARNING! invalid pointer (%p) proc %s\n",
 			 blk,Curproc->name);
-			stktrace();
+			printf("p = %p, p->s.ptr = %p\n",p,p->s.ptr);
 
 			logmsg(-1,"free: WARNING! invalid pointer (%p) pc = 0x%x %x proc %s\n",
 			 blk,ptr[-1],ptr[-2],Curproc->name);
+			fflush(stdout); ppause(1000L);
+			abort();
 		}
 		return;
 	}
@@ -264,7 +263,7 @@ void *blk;
 			memcpy(p[i].c,Debugpat,sizeof(Debugpat));
 		}
 	}
-	i_state = dirps();
+	i_state = disable();
  	/* Search the free list looking for the right place to insert */
 	for(q = Allocp; !(p > q && p < q->s.ptr); q = q->s.ptr){
 		/* Highest address on circular list? */
@@ -297,15 +296,13 @@ void *blk;
 	Allocp = q;
 #endif
 	restore(i_state);
-	if(Memwait != 0)
+	if((volatile)Memwait != 0)
 		ksignal(&Memwait,0);
 }
 
 /* Move existing block to new area */
 void *
-realloc(area,size)
-void *area;
-size_t size;
+realloc(void *area,size_t size)
 {
 	unsigned osize;
 	HEADER HUGE *hp;
@@ -325,24 +322,23 @@ size_t size;
 
 /* Allocate block of cleared memory */
 void *
-calloc(nelem,size)
-size_t nelem;	/* Number of elements */
-size_t size;	/* Size of each element */
-{
-	register unsigned i;
-	register char *cp;
+calloc(
+size_t nelem,	/* Number of elements */
+size_t size	/* Size of each element */
+){
+	unsigned i;
+	void *p;
 
 	i = nelem * size;
-	if((cp = malloc(i)) != NULL)
-		memset(cp,0,i);
-	return cp;
+	if((p = malloc(i)) != NULL)
+		memset(p,0,i);
+	return p;
 }
 /* Version of malloc() that waits if necessary for memory to become available */
 void *
-mallocw(nb)
-size_t nb;
+mallocw(size_t nb)
 {
-	register void *p;
+	void *p;
 
 	while((p = malloc(nb)) == NULL){
 		Memwait++;
@@ -353,17 +349,17 @@ size_t nb;
 }
 /* Version of calloc that waits if necessary for memory to become available */
 void *
-callocw(nelem,size)
-unsigned nelem;	/* Number of elements */
-unsigned size;	/* Size of each element */
-{
-	register unsigned i;
-	register char *cp;
+callocw(
+unsigned nelem,	/* Number of elements */
+unsigned size	/* Size of each element */
+){
+	unsigned i;
+	void *p;
 
 	i = nelem * size;
-	cp = mallocw(i);
-	memset(cp,0,i);
-	return cp;
+	p = mallocw(i);
+	memset(p,0,i);
+	return p;
 }
 /* Return 0 if at least Memthresh memory is available. Return 1 if
  * less than Memthresh but more than Memthresh/2 is available; i.e.,
@@ -372,7 +368,7 @@ unsigned size;	/* Size of each element */
  * be performed.
  */
 int
-availmem()
+availmem(void)
 {
 	void *p;
 
@@ -395,11 +391,11 @@ availmem()
 
 /* Print heap stats */
 static int
-dostat(argc,argv,envp)
-int argc;
-char *argv[];
-void *envp;
-{
+dostat(
+int argc,
+char *argv[],
+void *envp
+){
 	struct sysblock *sp;
 	int i;
 
@@ -425,11 +421,11 @@ void *envp;
 
 /* Print heap free list */
 static int
-dofreelist(argc,argv,envp)
-int argc;
-char *argv[];
-void *envp;
-{
+dofreelist(
+int argc,
+char *argv[],
+void *envp
+){
 	HEADER HUGE *p;
 	int i = 0;
 	int j;
@@ -439,7 +435,7 @@ void *envp;
 	for(p = Base.s.ptr;p != (HEADER HUGE *)&Base;p = p->s.ptr){
 		corrupt = 0;
 		if(Memdebug){
-			i_state = dirps();
+			i_state = disable();
 			for(j=1;j<p->s.size;j++){
 				if(memcmp(p[j].c,Debugpat,sizeof(Debugpat)) != 0){
 					corrupt = j;
@@ -449,9 +445,9 @@ void *envp;
 			restore(i_state);
 		}
 		if(corrupt)
-			printf("%p %6lu C: %u",p,p->s.size * ABLKSIZE,corrupt);
+			printf("%8p %7lu C: %u",p,p->s.size * ABLKSIZE,corrupt);
 		else
-			printf("%p %6lu",p,p->s.size * ABLKSIZE);
+			printf("%8p %7lu",p,p->s.size * ABLKSIZE);
 
 		if(++i == 4){
 			i = 0;
@@ -465,11 +461,11 @@ void *envp;
 	return 0;
 }
 static int
-dosizes(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dosizes(
+int argc,
+char *argv[],
+void *p
+){
 	int i;
 
 	for(i=0;i<16;i += 4){
@@ -481,28 +477,28 @@ void *p;
 	return 0;
 }
 int
-domem(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+domem(
+int argc,
+char *argv[],
+void *p
+){
 	return subcmd(Memcmds,argc,argv,p);
 }
 
 static int
-dothresh(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dothresh(
+int argc,
+char *argv[],
+void *p
+){
 	return setlong(&Memthresh,"Free memory threshold (bytes)",argc,argv);
 }
 static int
-domdebug(argc,argv,ptr)
-int argc;
-char *argv[];
-void *ptr;
-{
+domdebug(
+int argc,
+char *argv[],
+void *ptr
+){
 	int prev,j,i_state;
 	HEADER HUGE *p;
 
@@ -512,7 +508,7 @@ void *ptr;
 		return 0;
 
 	/* Turning debugging on; reinitialize free areas to debug pattern */
-	i_state = dirps();
+	i_state = disable();
 	for(p = Base.s.ptr;p != (HEADER HUGE *)&Base;p = p->s.ptr){
 		for(j=1;j<p->s.size;j++){
 			memcpy(p[j].c,Debugpat,sizeof(Debugpat));
@@ -524,11 +520,11 @@ void *ptr;
 
 /* Background memory compactor, used when memory runs low */
 void
-gcollect(i,v1,v2)
-int i;	/* Args not used */
-void *v1;
-void *v2;
-{
+gcollect(
+int i,	/* Args not used */
+void *v1,
+void *v2
+){
 	void (**fp)(int);
 	int red;
 

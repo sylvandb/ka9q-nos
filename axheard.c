@@ -23,7 +23,7 @@ genrpt(ifp)
 struct iface *ifp;
 {
 	struct mbuf *bp;
-	register uint8 *cp;
+	uint8 *cp;
 	int i;
 	struct lq *lp;
 	int maxentries,nentries;
@@ -79,8 +79,8 @@ struct mbuf **bpp;
  */
 uint8 *
 putlqhdr(cp,version,ip_addr)
-register uint8 *cp;
-uint16 version;
+uint8 *cp;
+uint version;
 int32 ip_addr;
 {
 	cp = put16(cp,version);
@@ -118,7 +118,7 @@ logsrc(ifp,addr)
 struct iface *ifp;
 uint8 *addr;
 {
-	register struct lq *lp;
+	struct lq *lp;
 
 	if((lp = al_lookup(ifp,addr,1)) == NULL
 	 && (lp = al_create(ifp,addr)) == NULL)
@@ -132,7 +132,7 @@ logdest(ifp,addr)
 struct iface *ifp;
 uint8 *addr;
 {
-	register struct ld *lp;
+	struct ld *lp;
 
 	if((lp = ad_lookup(ifp,addr,1)) == NULL
 	 && (lp = ad_create(ifp,addr)) == NULL)
@@ -147,7 +147,7 @@ struct iface *ifp;
 uint8 *addr;
 int sort;
 {
-	register struct lq *lp;
+	struct lq *lp;
 	struct lq *lplast = NULL;
 
 	for(lp = Lq;lp != NULL;lplast = lp,lp = lp->next){
@@ -169,7 +169,7 @@ al_create(ifp,addr)
 struct iface *ifp;
 uint8 *addr;
 {
-	register struct lq *lp;
+	struct lq *lp;
 
 	lp = (struct lq *)callocw(1,sizeof(struct lq));
 	memcpy(lp->addr,addr,AXALEN);
@@ -186,7 +186,7 @@ struct iface *ifp;
 uint8 *addr;
 int sort;
 {
-	register struct ld *lp;
+	struct ld *lp;
 	struct ld *lplast = NULL;
 
 	for(lp = Ld;lp != NULL;lplast = lp,lp = lp->next){
@@ -208,7 +208,7 @@ ad_create(ifp,addr)
 struct iface *ifp;
 uint8 *addr;
 {
-	register struct ld *lp;
+	struct ld *lp;
 
 	lp = (struct ld *)callocw(1,sizeof(struct ld));
 	memcpy(lp->addr,addr,AXALEN);

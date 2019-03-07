@@ -32,7 +32,7 @@ int n;
 	if(n == 0)
 		printf("&UCB      Rcv-Q  Local socket\n");
 
-	return printf("%9p%6u  %s\n",udp,udp->rcvcnt,pinet(&udp->socket));
+	return printf("%09p%6u  %s\n",udp,udp->rcvcnt,pinet(&udp->socket));
 }
 
 /* Dump UDP statistics and control blocks */

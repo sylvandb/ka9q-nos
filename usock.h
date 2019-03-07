@@ -114,7 +114,7 @@ extern char Badsocket[];
 extern char *Socktypes[];
 extern struct usock **Usock;
 extern unsigned Nsock;
-extern uint16 Lport;
+extern uint Lport;
 
 struct usock *itop(int s);
 void st_garbage(int red);

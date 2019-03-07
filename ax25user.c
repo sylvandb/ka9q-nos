@@ -17,7 +17,7 @@ struct iface *iface;	/* Interface */
 uint8 *local;		/* Local address */
 uint8 *remote;		/* Remote address */
 int mode;		/* active/passive/server */
-uint16 window;		/* Window size in bytes */
+uint window;		/* Window size in bytes */
 void (*r_upcall)();	/* Receiver upcall handler */
 void (*t_upcall)();	/* Transmitter upcall handler */
 void (*s_upcall)();	/* State-change upcall handler */
@@ -87,7 +87,7 @@ struct mbuf **bpp,
 int pid
 ){
 	struct mbuf *bp1;
-	uint16 offset,len,size;
+	uint offset,len,size;
 
 	if(axp == NULL || bpp == NULL || *bpp == NULL){
 		free_p(bpp);
@@ -121,7 +121,7 @@ int pid
 struct mbuf *
 recv_ax25(axp,cnt)
 struct ax25_cb *axp;
-uint16 cnt;
+uint cnt;
 {
 	struct mbuf *bp;
 
@@ -178,7 +178,7 @@ int
 ax25val(axp)
 struct ax25_cb *axp;
 {
-	register struct ax25_cb *axp1;
+	struct ax25_cb *axp1;
 
 	if(axp == NULL)
 		return 0;	/* Null pointer can't be valid */

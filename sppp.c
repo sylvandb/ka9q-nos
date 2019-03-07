@@ -72,7 +72,7 @@ struct mbuf **bpp
 	struct mbuf *obp;
 	uint8 *cp;
 	int c;
-	uint16 fcs;
+	uint fcs;
 
 	fcs = FCS_START;
 	obp = ambufw(6+2*len_p(*bpp));	/* Allocate worst-case */

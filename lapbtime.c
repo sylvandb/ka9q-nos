@@ -11,10 +11,9 @@ static void tx_enq(struct ax25_cb *axp);
 
 /* Called whenever timer T1 expires */
 void
-recover(p)
-void *p;
+recover(void *p)
 {
-	register struct ax25_cb *axp = (struct ax25_cb *)p;
+	struct ax25_cb *axp = (struct ax25_cb *)p;
 
 	axp->flags.retrans = 1;
 	axp->retries++;
@@ -62,10 +61,9 @@ void *p;
 
 /* Send a poll (S-frame command with the poll bit set) */
 void
-pollthem(p)
-void *p;
+pollthem(void *p)
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 
 	axp = (struct ax25_cb *)p;
 	if(axp->proto == V1)
@@ -80,8 +78,7 @@ void *p;
 }
 /* Transmit query */
 static void
-tx_enq(axp)
-register struct ax25_cb *axp;
+tx_enq(struct ax25_cb *axp)
 {
 	char ctl;
 	struct mbuf *bp;

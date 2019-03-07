@@ -152,7 +152,7 @@ void *p;
   	}
 
 	WantBootp = 0;
-	del_udp(bootp_cb);
+	del_udp(&bootp_cb);
 	return 0;
 }
 
@@ -318,7 +318,7 @@ struct ip *ip,
 struct mbuf *bp
 ){
 	struct udp udp;
-	struct mbuf *bp1;
+	struct mbuf *dbp;
 
 	/* Must be a udp packet */
 	if(ip->protocol !=  UDP_PTCL) 
@@ -329,9 +329,9 @@ struct mbuf *bp
 		return 0;
 
 	/* Invalid if not a udp bootp packet */
-	dup_p(&bp1,bp,0,len_p(bp));
-	ntohudp(&udp, &bp);
-	free_p(&bp);
+	dup_p(&dbp,bp,0,len_p(bp));
+	ntohudp(&udp, &dbp);
+	free_p(&dbp);
 
 	return (udp.dest == IPPORT_BOOTPC) ? 1 : 0;
 }

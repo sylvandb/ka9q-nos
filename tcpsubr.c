@@ -40,7 +40,7 @@ char *Tcpreasons[] = {
 	"ICMP"		/* Not actually used */
 };
 struct tcb *Tcbs;		/* Head of control block list */
-uint16 Tcp_mss = DEF_MSS;	/* Maximum segment size to be sent with SYN */
+uint Tcp_mss = DEF_MSS;		/* Maximum segment size to be sent with SYN */
 int32 Tcp_irtt = DEF_RTT;	/* Initial guess at round trip time */
 int Tcp_trace;			/* State change tracing flag */
 int Tcp_syndata;
@@ -71,9 +71,9 @@ struct mib_entry Tcp_mib[] = {
  */
 struct tcb *
 lookup_tcb(conn)
-register struct connection *conn;
+struct connection *conn;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 	struct tcb *tcblast = NULL;
 
 	for(tcb=Tcbs;tcb != NULL;tcblast = tcb,tcb = tcb->next){
@@ -100,7 +100,7 @@ struct tcb *
 create_tcb(conn)
 struct connection *conn;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 	struct tcp_rtt *tp;
 
 	if((tcb = lookup_tcb(conn)) != NULL)
@@ -130,11 +130,11 @@ struct connection *conn;
 /* Close our TCB */
 void
 close_self(tcb,reason)
-register struct tcb *tcb;
+struct tcb *tcb;
 int reason;
 {
 	struct reseq *rp1;
-	register struct reseq *rp;
+	struct reseq *rp;
 
 	if(tcb == NULL)
 		return;
@@ -158,7 +158,7 @@ int reason;
  */
 int
 seq_within(x,low,high)
-register int32 x,low,high;
+int32 x,low,high;
 {
 	if(low <= high){
 		if(low <= x && x <= high)
@@ -171,34 +171,34 @@ register int32 x,low,high;
 }
 int
 seq_lt(x,y)
-register int32 x,y;
+int32 x,y;
 {
 	return (long)(x-y) < 0;
 }
 #ifdef	notdef
 int
 seq_le(x,y)
-register int32 x,y;
+int32 x,y;
 {
 	return (long)(x-y) <= 0;
 }
 #endif	/* notdef */
 int
 seq_gt(x,y)
-register int32 x,y;
+int32 x,y;
 {
 	return (long)(x-y) > 0;
 }
 int
 seq_ge(x,y)
-register int32 x,y;
+int32 x,y;
 {
 	return (long)(x-y) >= 0;
 }
 
 void
 settcpstate(tcb,newstate)
-register struct tcb *tcb;
+struct tcb *tcb;
 enum tcp_state newstate;
 {
 	enum tcp_state oldstate;
@@ -269,7 +269,7 @@ rtt_add(addr,rtt)
 int32 addr;		/* Destination IP address */
 int32 rtt;
 {
-	register struct tcp_rtt *tp;
+	struct tcp_rtt *tp;
 	int32 abserr;
 
 	if(addr == 0)
@@ -291,7 +291,7 @@ struct tcp_rtt *
 rtt_get(addr)
 int32 addr;
 {
-	register struct tcp_rtt *tp;
+	struct tcp_rtt *tp;
 
 	if(addr == 0)
 		return NULL;
@@ -310,7 +310,7 @@ void
 tcp_garbage(red)
 int red;
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 	struct reseq *rp,*rp1;
 
 	for(tcb = Tcbs;tcb != NULL;tcb = tcb->next){

@@ -35,7 +35,6 @@
 #include "slhc.h"
 #include "n8250.h"
 #include "asy.h"
-#include "pktdrvr.h"
 #include "socket.h"
 #include "devparam.h"
 #include "ppp.h"
@@ -111,7 +110,7 @@ htonppp(
 struct ppp_hdr *ppp,
 struct mbuf **bpp
 ){
-	register uint8 *cp;
+	uint8 *cp;
 
 	/* Prepend header onto packet data */
 	pushdown(bpp, NULL, PPP_HDR_LEN);
@@ -221,7 +220,7 @@ ppp_output(
 struct iface *ifp,	/* Pointer to interface control block */
 char *dest,		/* Dest addr (ignored; PPP is point-to-point) */
 char *source,		/* Source addr (ignored; PPP is point-to-point) */
-uint16 protocol,		/* PPP Protocol Type field */
+uint protocol,		/* PPP Protocol Type field */
 struct mbuf **data	/* Actual data to be sent */
 ){
 	struct ppp_s *ppp_p;
@@ -257,13 +256,13 @@ struct mbuf **bpp
 	struct ppp_s *ppp_p = ifp->edv;
 	struct lcp_s *lcp_p = ppp_p->fsm[Lcp].pdv;
 	int full_lcp, full_ac, full_p;
-	uint16 calc_fcs = HDLC_FCS_START;
+	uint calc_fcs = HDLC_FCS_START;
 	int32 accm = LCP_ACCM_DEFAULT;
 	struct ppp_hdr ph;
 	int len = PPP_HDR_LEN;
 	struct mbuf *vbp;
-	register uint8 *cp;
-	register int c;
+	uint8 *cp;
+	int c;
 
 	dump(ifp,IF_TRACE_OUT,*bpp);
 	ppp_p->OutTxOctetCount += len_p(*bpp) + 2;  /* count FCS bytes */
@@ -315,7 +314,7 @@ struct mbuf **bpp
 	/* Allocate output mbuf that's twice as long as the packet.
 	 * This is a worst-case guess (consider a packet full of HDLC_FLAGs!)
 	 */
-	if ((vbp = alloc_mbuf((uint16)(2*len_p(*bpp) + HDLC_ENVLEN))) == NULL) {
+	if ((vbp = alloc_mbuf(2*len_p(*bpp) + HDLC_ENVLEN)) == NULL) {
 		ppp_error( ppp_p, bpp, Nospace );
 		ppp_p->OutMemory++;
 		return -1;
@@ -389,13 +388,13 @@ void *p2;
 	struct iface *ifp = p1;
 	struct ppp_s *ppp_p = ifp->edv;
 	int32 accm = LCP_ACCM_DEFAULT;
-	uint16 calc_fcs = HDLC_FCS_START;
+	uint calc_fcs = HDLC_FCS_START;
 	struct mbuf *raw_bp = NULL;
 	struct mbuf *head_bp = NULL;
 	struct mbuf *tail_bp = NULL;
 	uint8 *cp;			/* next byte in tail mbuf */
-	register int mode = FALSE;
-	register int c;
+	int mode = FALSE;
+	int c;
 
 	while ( (c = get_asy(dev)) != -1 ) {
 #ifdef PPP_DEBUG_RAW
@@ -533,7 +532,7 @@ struct mbuf **bpp;
 	struct ppp_s *ppp_p;
 	struct ipcp_s *ipcp_p;
 	struct ppp_hdr ph;
-	uint16 negotiated = FALSE;
+	uint negotiated = FALSE;
 
 	if ( ifp == NULL ) {
 		logmsg(-1, "ppp_proc: missing iface" );

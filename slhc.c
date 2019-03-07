@@ -45,7 +45,7 @@
 #include "tcp.h"
 #include "slhc.h"
 
-static uint8 *encode(uint8 *cp,uint16 n);
+static uint8 *encode(uint8 *cp,uint n);
 static long decode(struct mbuf **bpp);
 
 
@@ -57,8 +57,8 @@ slhc_init(rslots,tslots)
 int rslots;
 int tslots;
 {
-	register uint16 i;
-	register struct cstate *ts;
+	uint i;
+	struct cstate *ts;
 	struct slcompress *comp;
 
 	comp = callocw( 1, sizeof(struct slcompress) );
@@ -111,8 +111,8 @@ struct slcompress *comp;
 /* Encode a number */
 static uint8 *
 encode(cp,n)
-register uint8 *cp;
-uint16 n;
+uint8 *cp;
+uint n;
 {
 	if(n >= 256 || n == 0){
 		*cp++ = 0;
@@ -128,7 +128,7 @@ static long
 decode(bpp)
 struct mbuf **bpp;
 {
-	register int x;
+	int x;
 
 	x = PULLCHAR(bpp);
 	if(x == 0){
@@ -144,15 +144,15 @@ struct slcompress *comp;
 struct mbuf **bpp;
 int compress_cid;
 {
-	register struct cstate *ocs = &(comp->tstate[comp->xmit_oldest]);
-	register struct cstate *lcs = ocs;
-	register struct cstate *cs = lcs->next;
-	register uint16 hlen,iplen;
-	register struct tcp *oth;
-	register unsigned long deltaS, deltaA;
-	register uint16 changes = 0;
+	struct cstate *ocs = &(comp->tstate[comp->xmit_oldest]);
+	struct cstate *lcs = ocs;
+	struct cstate *cs = lcs->next;
+	uint hlen,iplen;
+	struct tcp *oth;
+	unsigned long deltaS, deltaA;
+	uint changes = 0;
 	uint8 new_seq[16];
-	register uint8 *cp = new_seq;
+	uint8 *cp = new_seq;
 	struct tcp th;
 	struct ip iph;
 	struct mbuf *copy;
@@ -368,7 +368,7 @@ found:
 		cp = (*bpp)->data;
 		*cp++ = changes;
 	}
-	cp = put16(cp,(uint16)deltaA);	/* Write TCP checksum */
+	cp = put16(cp,deltaA);	/* Write TCP checksum */
 	memcpy(cp,new_seq,deltaS);	/* Write list of deltas */
 	comp->sls_o_compressed++;
 	return SL_TYPE_COMPRESSED_TCP;
@@ -394,10 +394,10 @@ slhc_uncompress(comp, bpp)
 struct slcompress *comp;
 struct mbuf **bpp;
 {
-	register int changes;
+	int changes;
 	long x;
-	register struct tcp *thp;
-	register struct cstate *cs;
+	struct tcp *thp;
+	struct cstate *cs;
 	int len;
 
 	if(bpp == NULL){
@@ -442,7 +442,7 @@ struct mbuf **bpp;
 	switch(changes & SPECIALS_MASK){
 	case SPECIAL_I:		/* Echoed terminal traffic */
 		{
-		register uint16 i;
+		uint i;
 		i = cs->cs_ip.length;
 		i -= (cs->cs_ip.optlen + IPLEN + TCPLEN);
 		thp->ack += i;
@@ -508,11 +508,11 @@ slhc_remember(comp, bpp)
 struct slcompress *comp;
 struct mbuf **bpp;
 {
-	register struct cstate *cs;
+	struct cstate *cs;
 	struct ip iph;
 	struct tcp th;
-	uint16 len;
-	uint16 hdrlen;
+	uint len;
+	uint hdrlen;
 	int slot;
 
 	if(bpp == NULL){

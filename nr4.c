@@ -568,7 +568,7 @@ int gotchoke;	/* The choke flag is set in the received frame */
 	 * and we'll make a tx upcall
 	 */
 	if(cb->nbuffered < cb->window && cb->t_upcall != NULL)
-		(*cb->t_upcall)(cb, (uint16)((cb->window - cb->nbuffered) * NR4MAXINFO));
+		(*cb->t_upcall)(cb, ((cb->window - cb->nbuffered) * NR4MAXINFO));
 
 }
 

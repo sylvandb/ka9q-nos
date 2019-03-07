@@ -36,7 +36,7 @@ struct nrs {
 	struct mbuf *rbp;	/* Head of mbuf chain being filled */
 	struct mbuf *rbp1;	/* Pointer to mbuf currently being written */
 	uint8 *rcp;		/* Write pointer */
-	uint16 rcnt;		/* Length of mbuf chain */
+	uint rcnt;		/* Length of mbuf chain */
 	struct mbuf *tbp;	/* Transmit mbuf being sent */
 	long errors;		/* Checksum errors detected */
 	long packets ;		/* Number of packets received successfully */

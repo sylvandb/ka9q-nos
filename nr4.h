@@ -190,9 +190,9 @@ struct nr4cb {
 	struct timer tcd ;		/* connect/disconnect timer */
 	unsigned cdtries ;		/* Number of connect/disconnect tries */
 
-	void (*r_upcall)(struct nr4cb *,uint16);
+	void (*r_upcall)(struct nr4cb *,uint);
 					/* receive upcall */
-	void (*t_upcall)(struct nr4cb *,uint16);
+	void (*t_upcall)(struct nr4cb *,uint);
 					/* transmit upcall */
 	void (*s_upcall)(struct nr4cb *,int,int);
 					/* state change upcall */
@@ -258,10 +258,10 @@ void nr4unchoke(void *);
 void disc_nr4(struct nr4cb *);
 int kick_nr4(struct nr4cb *);
 struct nr4cb *open_nr4(struct nr4_addr *, struct nr4_addr *, int,
-  void (*)(struct nr4cb *,uint16),
-  void (*)(struct nr4cb *,uint16),
+  void (*)(struct nr4cb *,uint),
+  void (*)(struct nr4cb *,uint),
   void (*)(struct nr4cb *,int,int),int);
-struct mbuf *recv_nr4(struct nr4cb *, uint16);
+struct mbuf *recv_nr4(struct nr4cb *, uint);
 void reset_nr4(struct nr4cb *);
 int send_nr4(struct nr4cb *, struct mbuf **);
 

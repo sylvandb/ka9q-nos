@@ -16,9 +16,9 @@ struct ip *ip,
 struct mbuf **bpp,
 int cflag
 ){
-	uint16 hdr_len;
-	register uint8 *cp;
-	uint16 fl_offs;
+	uint hdr_len;
+	uint8 *cp;
+	uint fl_offs;
 
 	if(bpp == NULL)
 		return;
@@ -43,14 +43,7 @@ int cflag
 	cp = put16(cp,fl_offs);
 	*cp++ = ip->ttl;
 	*cp++ = ip->protocol;
-	if(cflag){
-		/* Use checksum from host structure */
-		cp = put16(cp,ip->checksum);
-	} else {
-		/* Clear checksum for later recalculation */
-		*cp++ = 0;
-		*cp++ = 0;
-	}
+	cp = put16(cp,cflag ? ip->checksum : 0);
 	cp = put32(cp,ip->source);
 	cp = put32(cp,ip->dest);
 	if(ip->optlen != 0)
@@ -67,7 +60,7 @@ struct ip *ip,
 struct mbuf **bpp
 ){
 	int ihl;
-	uint16 fl_offs;
+	uint fl_offs;
 	uint8 ipbuf[IPLEN];
 
 	if(pullup(bpp,ipbuf,IPLEN) != IPLEN)
@@ -101,30 +94,30 @@ struct mbuf **bpp
 	return ihl;
 }
 /* Perform end-around-carry adjustment */
-uint16
+uint
 eac(
 int32 sum	/* Carries in high order 16 bits */
 ){
-	register uint16 csum;
+	uint csum;
 
 	while((csum = sum >> 16) != 0)
 		sum = csum + (sum & 0xffffL);
-	return (uint16) (sum & 0xffffl);	/* Chops to 16 bits */
+	return sum & 0xffffl;	/* Chops to 16 bits */
 }
 /* Checksum a mbuf chain, with optional pseudo-header */
-uint16
+uint
 cksum(
 struct pseudo_header *ph,
 struct mbuf *m,
-uint16 len
+uint len
 ){
-	register uint16 cnt, total;
-	register int32 sum, csum;
-	register uint8 *up;
-	uint16 csum1;
+	uint cnt, total;
+	int32 sum, csum;
+	uint8 *up;
+	uint csum1;
 	int swap = 0;
 
-	sum = 0l;
+	sum = 0;
 
 	/* Sum pseudo-header, if present */
 	if(ph != NULL){
@@ -146,7 +139,7 @@ uint16 len
 			if(swap)
 				csum = *up++;
 			else
-				csum = (uint16)*up++ << 8;
+				csum = (uint)*up++ << 8;
 			cnt--;
 			swap = !swap;
 		}
@@ -155,7 +148,7 @@ uint16 len
 			 * the work. At this point, up is guaranteed to be on
 			 * a short boundary
 			 */
-			csum1 = lcsum((unsigned short *)up, (uint16)(cnt >> 1));
+			csum1 = lcsum((uint16 *)up, cnt >> 1);
 			if(swap)
 				csum1 = (csum1 << 8) | (csum1 >> 8);
 			csum += csum1;
@@ -165,13 +158,12 @@ uint16 len
 			if(swap)
 				csum += up[--cnt];
 			else
-				csum += (uint16)up[--cnt] << 8;
+				csum += (uint)up[--cnt] << 8;
 			swap = !swap;
 		}
 		sum += csum;
 		total += m->cnt;
 	}
 	/* Do final end-around carry, complement and return */
-	return (uint16)(~eac(sum) & 0xffff);
+	return ~eac(sum) & 0xffff;
 }
-

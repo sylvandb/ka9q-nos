@@ -9,7 +9,7 @@ struct ahdlc {
 	int hunt;		/* Flushing input until next flag */
 	struct mbuf *inframe;	/* Current frame being reassembled */
 	int maxsize;		/* Maximum packet size */
-	uint16 fcs;		/* current CRC value */
+	uint fcs;		/* current CRC value */
 	int32 rxframes;		/* Valid frames received */
 	int32 aborts;		/* Aborts seen */
 	int32 toobigs;		/* Frames larger than maxsize */

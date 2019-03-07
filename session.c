@@ -2,6 +2,7 @@
  * Copyright 1991 Phil Karn, KA9Q
  */
 #include <stdio.h>
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "proc.h"
@@ -258,24 +259,26 @@ int makecur;
 	return sp;
 }
 void
-freesession(sp)
-struct session *sp;
+freesession(spp)
+struct session **spp;
 {
 	int i;
+	struct session *sp;
 
-	if(sp == NULL || sp != Sessions[sp->index])
+	if(spp == NULL || (sp=*spp) == NULL || sp != Sessions[sp->index])
 		return;	/* Not on session list */
+	*spp = NULL;
 	kwait(NULL);	/* Wait for any pending output to go */
 
 	for(i=0;i<Nsessions;i++){
-		if(Sessions[i]->parent == sp)
+		if(Sessions[i] != NULL && Sessions[i]->parent == sp)
 			Sessions[i]->parent = sp->parent;
 	}
 	Sessions[sp->index] = NULL;
 	if(sp->proc1 != NULL)
-		killproc(sp->proc1);
+		killproc(&sp->proc1);
 	if(sp->proc2 != NULL)
-		killproc(sp->proc2);
+		killproc(&sp->proc2);
 
 	free(sp->ttystate.line);
 	if(sp->network != NULL)
@@ -296,6 +299,7 @@ struct session *sp;
 		alert(Display,1);
 	}
 	free(sp);
+
 }
 /* Control session recording */
 int
@@ -361,8 +365,7 @@ void *p;
 		/* Abort upload */
 		fclose(sp->upload);
 		sp->upload = NULL;
-		killproc(sp->proc2);
-		sp->proc2 = NULL;
+		killproc(&sp->proc2);
 		return 0;
 	}
 	/* Open upload file */
@@ -425,7 +428,7 @@ int flush;	/* Flush queued input? */
 
 /* Flush the current session's standard output. Called on every clock tick */
 void
-sesflush()
+sesflush(void)
 {
 	if(Current != NULL)
 		fflush(Current->output);

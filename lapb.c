@@ -13,7 +13,7 @@
 
 static void handleit(struct ax25_cb *axp,int pid,struct mbuf **bp);
 static void procdata(struct ax25_cb *axp,struct mbuf **bp);
-static int ackours(struct ax25_cb *axp,uint16 n);
+static int ackours(struct ax25_cb *axp,uint n);
 static void clr_ex(struct ax25_cb *axp);
 static void enq_resp(struct ax25_cb *axp);
 static void inv_rex(struct ax25_cb *axp);
@@ -27,13 +27,13 @@ struct mbuf **bpp		/* Rest of frame, starting with ctl */
 ){
 	int control;
 	int class;		/* General class (I/S/U) of frame */
-	uint16 type;		/* Specific type (I/RR/RNR/etc) of frame */
+	uint type;		/* Specific type (I/RR/RNR/etc) of frame */
 	char pf;		/* extracted poll/final bit */
 	char poll = 0;
 	char final = 0;
-	uint16 nr;		/* ACK number of incoming frame */
-	uint16 ns;		/* Seq number of incoming frame */
-	uint16 tmp;
+	uint nr;		/* ACK number of incoming frame */
+	uint ns;		/* Seq number of incoming frame */
+	uint tmp;
 
 	if(bpp == NULL || *bpp == NULL || axp == NULL){
 		free_p(bpp);
@@ -366,11 +366,11 @@ struct mbuf **bpp		/* Rest of frame, starting with ctl */
 static int
 ackours(
 struct ax25_cb *axp,
-uint16 n
+uint n
 ){	
 	struct mbuf *bp;
 	int acked = 0;	/* Count of frames acked by this ACK */
-	uint16 oldest;	/* Seq number of oldest unacked I-frame */
+	uint oldest;	/* Seq number of oldest unacked I-frame */
 	int32 rtt,abserr;
 
 	/* Free up acknowledged frames by purging frames from the I-frame
@@ -428,8 +428,7 @@ uint16 n
 
 /* Establish data link */
 void
-est_link(axp)
-struct ax25_cb *axp;
+est_link(struct ax25_cb *axp)
 {
 	clr_ex(axp);
 	axp->retries = 0;
@@ -439,8 +438,7 @@ struct ax25_cb *axp;
 }
 /* Clear exception conditions */
 static void
-clr_ex(axp)
-struct ax25_cb *axp;
+clr_ex(struct ax25_cb *axp)
 {
 	axp->flags.remotebusy = NO;
 	axp->flags.rejsent = NO;
@@ -449,8 +447,7 @@ struct ax25_cb *axp;
 }
 /* Enquiry response */
 static void
-enq_resp(axp)
-struct ax25_cb *axp;
+enq_resp(struct ax25_cb *axp)
 {
 	char ctl;
 
@@ -461,8 +458,7 @@ struct ax25_cb *axp;
 }
 /* Invoke retransmission */
 static void
-inv_rex(axp)
-struct ax25_cb *axp;
+inv_rex(struct ax25_cb *axp)
 {
 	axp->vs -= axp->unack;
 	axp->vs &= MMASK;
@@ -470,11 +466,11 @@ struct ax25_cb *axp;
 }
 /* Send S or U frame to currently connected station */
 int
-sendctl(axp,cmdrsp,cmd)
-struct ax25_cb *axp;
-int cmdrsp;
-int cmd;
-{
+sendctl(
+struct ax25_cb *axp,
+int cmdrsp,
+int cmd
+){
 	if((ftype((char)cmd) & 0x3) == S)	/* Insert V(R) if S frame */
 		cmd |= (axp->vr << 5);
 	return sendframe(axp,cmdrsp,cmd,NULL);
@@ -483,10 +479,9 @@ int cmd;
  * Return number of frames sent
  */
 int
-lapb_output(axp)
-register struct ax25_cb *axp;
+lapb_output(struct ax25_cb *axp)
 {
-	register struct mbuf *bp;
+	struct mbuf *bp;
 	struct mbuf *tbp;
 	char control;
 	int sent = 0;
@@ -623,11 +618,11 @@ struct mbuf **bpp
 struct mbuf *
 segmenter(
 struct mbuf **bpp,	/* Complete packet */
-uint16 ssize		/* Max size of frame segments */
+uint ssize		/* Max size of frame segments */
 ){
 	struct mbuf *result = NULL;
 	struct mbuf *bptmp;
-	uint16 len,offset;
+	uint len,offset;
 	int segments;
 
 	/* See if packet is too small to segment. Note 1-byte grace factor

@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "proc.h"
@@ -93,7 +94,7 @@ static int compare_rr_list(struct rr *rrlp,struct rr *target_rrp);
 static struct rr *copy_rr(struct rr *rrp);
 static struct rr *copy_rr_list(struct rr *rrlp);
 static struct rr *make_rr(int source,
-	char *dname,uint16 class,uint16 type,int32 ttl,uint16 rdl,void *data);
+	char *dname,uint class,uint type,int32 ttl,uint rdl,void *data);
 
 static void dcache_add(struct rr *rrlp);
 static void dcache_drop(struct rr *rrp);
@@ -106,8 +107,8 @@ static struct rr *dfile_search(struct rr *rrlp);
 static void dfile_update(int s,void *unused,void *p);
 
 static void dumpdomain(struct dhdr *dhp,int32 rtt);
-static int dns_makequery(uint16 op,struct rr *rrp,
-	uint8 *buffer,uint16 buflen);
+static int dns_makequery(uint op,struct rr *rrp,
+	uint8 *buffer,uint buflen);
 static int dns_query(struct rr *rrlp);
 
 static int isaddr(char *s);
@@ -168,7 +169,7 @@ void *p;
 			printf("%s\n",Dsuffix);
 		return 0;
 	}
-	free(Dsuffix);
+	FREE(Dsuffix);
 	Dsuffix = strdup(argv[1]);
 	return 0;
 }
@@ -224,7 +225,7 @@ void *p;
 	}
 	fflush(stdout);
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 
@@ -260,8 +261,7 @@ void *p;
 }
 
 static void
-dlist_add(dp)
-register struct dserver *dp;
+dlist_add(struct dserver *dp)
 {
 	dp->prev = NULL;
 	dp->next = Dservers;
@@ -271,8 +271,7 @@ register struct dserver *dp;
 }
 
 static void
-dlist_drop(dp)
-register struct dserver *dp;
+dlist_drop(struct dserver *dp)
 {
 	if(dp->prev != NULL)
 		dp->prev->next = dp->next;
@@ -297,8 +296,7 @@ void *p;
 	return add_nameserver(address);
 }
 int
-add_nameserver(address)
-int32 address;
+add_nameserver(int32 address)
 {
 	struct dserver *dp;
 
@@ -331,7 +329,7 @@ void *p;
 	}
 
 	dlist_drop(dp);
-	free(dp);
+	FREE(dp);
 	return 0;
 }
 
@@ -341,7 +339,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct dserver *dp;
+	struct dserver *dp;
 
 	printf("Server address          srtt    mdev   timeout   queries responses\n");
 	for(dp = Dservers;dp != NULL;dp = dp->next){
@@ -378,7 +376,7 @@ void *p;
 
 		dns_query(rrp);
 		result_rrlp = dcache_search(rrp);
-		free_rr(rrp);
+		free_rr(&rrp);
 	}
 
 	/* Put tty into raw mode so single-char responses will work */
@@ -406,9 +404,9 @@ void *p;
 		}
 	}
 	fflush(stdout);
-	free_rr(result_rrlp);
+	free_rr(&result_rrlp);
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 
@@ -436,8 +434,7 @@ void *p;
  **/
 
 static char *
-dtype(value)
-int value;
+dtype(int value)
 {
 	static char buf[10];
 
@@ -452,8 +449,7 @@ int value;
  * returns number of expired records.
  */
 static int
-check_ttl(rrlp)
-register struct rr *rrlp;
+check_ttl(struct rr *rrlp)
 {
 	int count = 0;
 
@@ -469,8 +465,7 @@ register struct rr *rrlp;
  * returns 0 if match, nonzero otherwise.
  */
 static int
-compare_rr(search_rrp,target_rrp)
-register struct rr *search_rrp,*target_rrp;
+compare_rr(struct rr *search_rrp,struct rr *target_rrp)
 {
 	int i;
 
@@ -547,8 +542,7 @@ register struct rr *search_rrp,*target_rrp;
 }
 
 static int
-compare_rr_list(rrlp,target_rrp)
-register struct rr *rrlp,*target_rrp;
+compare_rr_list(struct rr *rrlp,struct rr *target_rrp)
 {
 	while(rrlp != NULL){
 		if(compare_rr(rrlp,target_rrp) == 0)
@@ -566,10 +560,9 @@ register struct rr *rrlp,*target_rrp;
 
 /* Make a new copy of a resource record */
 static struct rr *
-copy_rr(rrp)
-register struct rr *rrp;
+copy_rr(struct rr *rrp)
 {
-	register struct rr *newrr;
+	struct rr *newrr;
 
 	if(rrp == NULL)
 		return NULL;
@@ -618,11 +611,9 @@ register struct rr *rrp;
 }
 
 static struct rr *
-copy_rr_list(rrlp)
-register struct rr *rrlp;
+copy_rr_list(struct rr *rrlp)
 {
-	register struct rr **rrpp;
-	struct rr *result_rrlp;
+	struct rr **rrpp,*result_rrlp;
 
 	rrpp = &result_rrlp;
 	while(rrlp != NULL){
@@ -637,15 +628,19 @@ register struct rr *rrlp;
 /* Free (list of) resource records */
 void
 free_rr(rrlp)
-register struct rr *rrlp;
+struct rr **rrlp;
 {
-	register struct rr *rrp;
+	struct rr *rrp;
+	struct rr *rrnext;
 
-	while((rrp = rrlp) != NULL){
-		rrlp = rrlp->next;
+	if(rrlp == NULL || (rrp = *rrlp) == NULL)
+		return;
+	*rrlp = NULL;
+	for(;rrp != NULL;rrp = rrnext){
+		rrnext = rrp->next;
 
-		free(rrp->comment);
-		free(rrp->name);
+		FREE(rrp->comment);
+		FREE(rrp->name);
 		if(rrp->rdlength > 0){
 			switch(rrp->type){
 			case TYPE_A:
@@ -657,36 +652,36 @@ register struct rr *rrlp;
 			case TYPE_NS:
 			case TYPE_PTR:
 			case TYPE_TXT:
-				free(rrp->rdata.name);
+				FREE(rrp->rdata.name);
 				break;
 			case TYPE_HINFO:
-				free(rrp->rdata.hinfo.cpu);
-				free(rrp->rdata.hinfo.os);
+				FREE(rrp->rdata.hinfo.cpu);
+				FREE(rrp->rdata.hinfo.os);
 				break;
 			case TYPE_MX:
-				free(rrp->rdata.mx.exch);
+				FREE(rrp->rdata.mx.exch);
 				break;
 			case TYPE_SOA:
-				free(rrp->rdata.soa.mname);
-				free(rrp->rdata.soa.rname);
+				FREE(rrp->rdata.soa.mname);
+				FREE(rrp->rdata.soa.rname);
 				break;
 			}
 		}
-		free(rrp);
+		FREE(rrp);
 	}
 }
 
 static struct rr *
-make_rr(source,dname,dclass,dtype,ttl,rdl,data)
-int source;
-char *dname;
-uint16 dclass;
-uint16 dtype;
-int32 ttl;
-uint16 rdl;
-void *data;
+make_rr(
+int source,
+char *dname,
+uint dclass,
+uint dtype,
+int32 ttl,
+uint rdl,
+void *data)
 {
-	register struct rr *newrr;
+	struct rr *newrr;
 
 	newrr = (struct rr *)callocw(1,sizeof(struct rr));
 	newrr->source = source;
@@ -700,7 +695,7 @@ void *data;
 	switch(dtype){
 	case TYPE_A:
 	  {
-		register int32 *ap = (int32 *)data;
+		int32 *ap = (int32 *)data;
 		newrr->rdata.addr = *ap;
 		break;
 	  }
@@ -717,21 +712,21 @@ void *data;
 	  }
 	case TYPE_HINFO:
 	  {
-		register struct hinfo *hinfop = (struct hinfo *)data;
+		struct hinfo *hinfop = (struct hinfo *)data;
 		newrr->rdata.hinfo.cpu = strdup(hinfop->cpu);
 		newrr->rdata.hinfo.os = strdup(hinfop->os);
 		break;
 	  }
 	case TYPE_MX:
 	  {
-		register struct mx *mxp = (struct mx *)data;
+		struct mx *mxp = (struct mx *)data;
 		newrr->rdata.mx.pref = mxp->pref;
 		newrr->rdata.mx.exch = strdup(mxp->exch);
 		break;
 	  }
 	case TYPE_SOA:
 	  {
-		register struct soa *soap = (struct soa *)data;
+		struct soa *soap = (struct soa *)data;
 		newrr->rdata.soa.mname = 	strdup(soap->mname);
 		newrr->rdata.soa.rname = 	strdup(soap->rname);
 		newrr->rdata.soa.serial = 	soap->serial;
@@ -751,10 +746,9 @@ void *data;
  **/
 
 static void
-dcache_add(rrlp)
-register struct rr *rrlp;
+dcache_add(struct rr *rrlp)
 {
-	register struct rr *last_rrp;
+	struct rr *last_rrp;
 	struct rr *save_rrp;
 
 	if(rrlp == NULL)
@@ -774,8 +768,7 @@ register struct rr *rrlp;
 }
 
 static void
-dcache_drop(rrp)
-register struct rr *rrp;
+dcache_drop(struct rr *rrp)
 {
 	if(rrp->last != NULL)
 		rrp->last->next = rrp->next;
@@ -795,10 +788,9 @@ register struct rr *rrp;
  * Returns RR list, or NULL if no record found.
  */
 static struct rr *
-dcache_search(rrlp)
-struct rr *rrlp;
+dcache_search(struct rr *rrlp)
 {
-	register struct rr *rrp, *test_rrp;
+	struct rr *rrp, *test_rrp;
 	struct rr **rrpp, *result_rrlp;
 	int32 elapsed;
 	time_t now;
@@ -826,7 +818,7 @@ struct rr *rrlp;
 			rrpp = &(*rrpp)->next;
 		} else if(test_rrp->source == RR_FILE && ++count > Dcache_size){
 			dcache_drop(test_rrp);
-			free_rr(test_rrp);
+			free_rr(&test_rrp);
 		}
 	}
 	*rrpp = NULL;
@@ -835,13 +827,15 @@ struct rr *rrlp;
 
 /* Move a list of resource records to the cache, removing duplicates. */
 static void
-dcache_update(rrlp)
-register struct rr *rrlp;
+dcache_update(struct rr *rrlp)
 {
+	struct rr *rr1;
+
 	if(rrlp == NULL)
 		return;
+	rr1 = dcache_search(rrlp);	/* remove duplicates, first */
 
-	free_rr(dcache_search(rrlp));	/* remove duplicates, first */
+	free_rr(&rr1);
 	dcache_add(rrlp);
 }
 
@@ -851,9 +845,7 @@ register struct rr *rrlp;
  **/
 
 static struct rr *
-get_rr(fp,lastrrp)
-FILE *fp;
-struct rr *lastrrp;
+get_rr(FILE *fp,struct rr *lastrrp)
 {
 	char *line,*lp,*strtok();
 	struct rr *rrp;
@@ -862,7 +854,7 @@ struct rr *lastrrp;
 
 	line = mallocw(256);
 	if(fgets(line,256,fp) == NULL){
-		free(line);
+		FREE(line);
 		return NULL;
 	}
 
@@ -883,7 +875,7 @@ struct rr *lastrrp;
 	}
 	if(name == NULL || (i = strlen(name)) == 0){
 		rrp->comment = strdup("\n");
-		free(line);
+		FREE(line);
 		return rrp;
 	}
 
@@ -947,7 +939,7 @@ struct rr *lastrrp;
 
 	if(data == NULL){
 		/* Empty record, just return */
-		free(line);
+		FREE(line);
 		return rrp;
 	}
 	switch(rrp->type){
@@ -1008,15 +1000,13 @@ struct rr *lastrrp;
 	}
 
 	/* !!! need to handle trailing comments */
-	free(line);
+	FREE(line);
 	return rrp;
 }
 
 /* Print a resource record */
 static void
-put_rr(fp,rrp)
-FILE *fp;
-struct rr *rrp;
+put_rr(FILE *fp,struct rr *rrp)
 {
 	char * stuff;
 
@@ -1086,10 +1076,9 @@ struct rr *rrp;
  * Returns RR list, or NULL if no record found.
  */
 static struct rr *
-dfile_search(rrlp)
-struct rr *rrlp;
+dfile_search(struct rr *rrlp)
 {
-	register struct rr *frrp;
+	struct rr *frrp;
 	struct rr **rrpp, *result_rrlp, *oldrrp;
 	int32 elapsed;
 	FILE *dbase;
@@ -1122,7 +1111,7 @@ struct rr *rrlp;
 	oldrrp = NULL;
 	rrpp = &result_rrlp;
 	while((frrp = get_rr(dbase,oldrrp)) != NULL){
-		free_rr(oldrrp);
+		free_rr(&oldrrp);
 		if(frrp->type != TYPE_MISSING
 		&& frrp->rdlength > 0
 		&& compare_rr_list(rrlp,frrp) == 0){
@@ -1148,7 +1137,7 @@ struct rr *rrlp;
 		if(!main_exit)
 			kwait(NULL);	/* run multiple sessions */
 	}
-	free_rr(oldrrp);
+	free_rr(&oldrrp);
 	*rrpp = NULL;
 
 	fclose(dbase);
@@ -1165,10 +1154,7 @@ struct rr *rrlp;
  * to the local file, eliminating duplicates while it goes.
  */
 static void
-dfile_update(s,unused,p)
-int s;
-void *unused;
-void *p;
+dfile_update(int s,void *unused,void *p)
 {
 	struct rr **rrpp, *rrlp, *oldrrp;
 	char *newname;
@@ -1189,7 +1175,7 @@ void *p;
 	strcpy(&newname[strlen(newname)-3],"tmp");
 
 	while(Dfile_wait_absolute != 0L && !main_exit){
-		register struct rr *frrp;
+		struct rr *frrp;
 		int32 elapsed;
 
 		while(Dfile_wait_absolute != 0L){
@@ -1245,14 +1231,14 @@ void *p;
 			/* great! no old file, so we're ready to go. */
 			fclose(new_fp);
 			rename(newname,Dfile);
-			free_rr(rrlp);
+			free_rr(&rrlp);
 			break;
 		}
 		if(fstat(fileno(old_fp),&old_stat) != 0){
 			printf("dfile_update: can't get old_file status!\n");
 			fclose(new_fp);
 			fclose(old_fp);
-			free_rr(rrlp);
+			free_rr(&rrlp);
 			break;
 		}
 		if((elapsed = (int32)(new_stat.st_ctime - old_stat.st_ctime)) < 0L)
@@ -1261,7 +1247,7 @@ void *p;
 		/* Now append any non-duplicate records */
 		oldrrp = NULL;
 		while((frrp = get_rr(old_fp,oldrrp)) != NULL){
-			free_rr(oldrrp);
+			free_rr(&oldrrp);
 			if(frrp->name == NULL
 			&& frrp->comment != NULL)
 				put_rr(new_fp,frrp);
@@ -1278,10 +1264,10 @@ void *p;
 			if(!main_exit)
 				kwait(NULL);	/* run in background */
 		}
-		free_rr(oldrrp);
+		free_rr(&oldrrp);
 		fclose(new_fp);
 		fclose(old_fp);
-		free_rr(rrlp);
+		free_rr(&rrlp);
 
 		/* wait for everyone else to finish reading */
 		Dfile_writing++;
@@ -1294,7 +1280,7 @@ void *p;
 		Dfile_writing = 0;
 		ksignal(&Dfile_reading,0);
 	}
-	free(newname);
+	FREE(newname);
 
 	logmsg(-1,"update Domain.txt finished");
 	Dfile_updater = NULL;
@@ -1306,9 +1292,7 @@ void *p;
  **/
 
 static void
-dumpdomain(dhp,rtt)
-struct dhdr *dhp;
-int32 rtt;
+dumpdomain(struct dhdr *dhp,int32 rtt)
 {
 	struct rr *rrp;
 	char * stuff;
@@ -1339,21 +1323,21 @@ int32 rtt;
 }
 
 static int
-dns_makequery(op,srrp,buffer,buflen)
-uint16 op;	/* operation */
-struct rr *srrp;/* Search RR */
-uint8 *buffer;	/* Area for query */
-uint16 buflen;	/* Length of same */
-{
+dns_makequery(
+uint op,	/* operation */
+struct rr *srrp,/* Search RR */
+uint8 *buffer,	/* Area for query */
+uint buflen	/* Length of same */
+){
 	uint8 *cp;
 	char *cp1;
 	char *dname, *sname;
-	uint16 parameter;
-	uint16 dlen,len;
+	uint parameter;
+	uint dlen,len;
 
 	cp = buffer;
 	/* Use millisecond clock for timestamping */
-	cp = put16(cp,(uint16)msclock());
+	cp = put16(cp,msclock());
 	parameter = (op << 11)
 			| 0x0100;	/* Recursion desired */
 	cp = put16(cp,parameter);
@@ -1385,7 +1369,7 @@ uint16 buflen;	/* Length of same */
 		dname += len+1;
 		dlen -= len+1;
 	}
-	free(sname);
+	FREE(sname);
 	cp = put16(cp,srrp->type);
 	cp = put16(cp,srrp->class);
 	return cp - buffer;
@@ -1399,8 +1383,7 @@ uint16 buflen;	/* Length of same */
  * return value: 0 if something added to cache, -1 if error
  */
 static int
-dns_query(rrlp)
-struct rr *rrlp;
+dns_query(struct rr *rrlp)
 {
 	struct mbuf *bp;
 	struct dhdr *dhp;
@@ -1469,7 +1452,7 @@ struct rr *rrlp;
 	ntohdomain(dhp,&bp);	/* Convert to local format */
 
 	/* Compute and update the round trip time */
-	rtt = (int32) ((uint16)msclock() - dhp->id);
+	rtt = (int32) ((uint)msclock() - dhp->id);
 	abserr = rtt > dp->srtt ? rtt - dp->srtt : dp->srtt - rtt;
 	dp->srtt = ((AGAIN-1) * dp->srtt + rtt + (AGAIN/2)) >> LAGAIN;
 	dp->mdev = ((DGAIN-1) * dp->mdev + abserr + (DGAIN/2)) >> LDGAIN;
@@ -1488,7 +1471,7 @@ struct rr *rrlp;
 	 * only one question, which is true for all questions we send.
 	 */
 	if(dhp->aa && (dhp->rcode == NAME_ERROR || dhp->ancount == 0)){
-		register struct rr *rrp;
+		struct rr *rrp;
 		long ttl = 600L; /* Default TTL for negative records */
 
 		/* look for SOA ttl */
@@ -1501,8 +1484,7 @@ struct rr *rrlp;
 		for(rrp = dhp->questions; rrp != NULL; rrp = rrp->next)
 			rrp->ttl = ttl;
 	} else {
-		free_rr(dhp->questions);
-		dhp->questions = NULL;
+		free_rr(&dhp->questions);
 	}
 
 	/* post in reverse order to maintain original order */
@@ -1521,7 +1503,7 @@ struct rr *rrlp;
 	if(Dtrace)
 		keywait(NULL,1);	/* so we can look around */
 #endif
-	free(dhp);
+	FREE(dhp);
 	return 0;
 }
 
@@ -1534,8 +1516,7 @@ struct rr *rrlp;
  * return FALSE otherwise (i.e., if string is a domain name)
  */
 static int
-isaddr(s)
-register char *s;
+isaddr(char *s)
 {
 	char c;
 
@@ -1552,8 +1533,7 @@ register char *s;
 /* Return "normalized" domain name, with default suffix and trailing '.'
  */
 static char *
-checksuffix(dname)
-char *dname;
+checksuffix(char *dname)
 {
 	char *sname, *tname;
 
@@ -1562,14 +1542,14 @@ char *dname;
 		/* Append default suffix */
 		tname = mallocw(strlen(sname)+strlen(Dsuffix)+2);
 		sprintf(tname,"%s.%s",sname,Dsuffix);
-		free(sname);
+		FREE(sname);
 		sname = tname;
 	}
 	if(sname[strlen(sname)-1] != '.'){
 		/* Append trailing dot */
 		tname = mallocw(strlen(sname)+2);
 		sprintf(tname,"%s.",sname);
-		free(sname);
+		FREE(sname);
 		sname = tname;
 	}
 	return sname;
@@ -1579,10 +1559,9 @@ char *dname;
  * Returns RR list, or NULL if no record found.
  */
 static struct rr *
-resolver(rrlp)
-register struct rr *rrlp;
+resolver(struct rr *rrlp)
 {
-	register struct rr *result_rrlp;
+	struct rr *result_rrlp;
 
 	if((result_rrlp = dcache_search(rrlp)) == NULL){
 		result_rrlp = dfile_search(rrlp);
@@ -1601,8 +1580,7 @@ register struct rr *rrlp;
  * Returns RR list, or NULL if no record found.
  */
 struct rr *
-inverse_a(ip_address)
-int32 ip_address;
+inverse_a(int32 ip_address)
 {
 	struct rr *prrp;
 	struct rr *result_rrlp;
@@ -1624,7 +1602,7 @@ int32 ip_address;
 
 	result_rrlp = resolver(prrp);
 
-	free_rr(prrp);
+	free_rr(&prrp);
 	return result_rrlp;
 }
 
@@ -1632,9 +1610,7 @@ int32 ip_address;
  * Returns RR list, or NULL if no record found.
  */
 struct rr *
-resolve_rr(dname,dtype)
-char *dname;
-uint16 dtype;
+resolve_rr(char *dname,uint dtype)
 {
 	struct rr *qrrp;
 	struct rr *result_rrlp;
@@ -1658,13 +1634,12 @@ uint16 dtype;
 #endif
 		/* Should be CNAME or PTR record */
 		/* Replace name and try again */
-		free(qrrp->name);
+		FREE(qrrp->name);
 		qrrp->name = strdup(result_rrlp->rdata.name);
-		free_rr(result_rrlp);
-		result_rrlp = NULL;
+		free_rr(&result_rrlp);
 		looping--;
 	}
-	free_rr(qrrp);
+	free_rr(&qrrp);
 	return result_rrlp;
 }
 
@@ -1672,10 +1647,10 @@ uint16 dtype;
  * Returns string, or NULL if no name found.
  */
 char *
-resolve_a(ip_address,shorten)
-int32 ip_address;		/* search address */
-int shorten;			/* return only first part of name (flag)*/
-{
+resolve_a(
+int32 ip_address,		/* search address */
+int shorten			/* return only first part of name (flag)*/
+){
 	struct rr *save_rrlp, *rrlp;
 	char *result = NULL;
 
@@ -1693,7 +1668,7 @@ int shorten;			/* return only first part of name (flag)*/
 			}
 		}
 	}
-	free_rr(save_rrlp);
+	free_rr(&save_rrlp);
 
 	if(result != NULL && shorten){
 		int dot;
@@ -1703,7 +1678,7 @@ int shorten;			/* return only first part of name (flag)*/
 			shortened = mallocw(dot+1);
 			strncpy(shortened, result, dot);
 			shortened[dot] = '\0';
-			free(result);
+			FREE(result);
 			result = shortened;
 		}
 	}
@@ -1714,10 +1689,9 @@ int shorten;			/* return only first part of name (flag)*/
  * Returns 0 if name is currently unresolvable.
  */
 int32
-resolve(name)
-char *name;
+resolve(char *name)
 {
-	register struct rr *rrlp;
+	struct rr *rrlp;
 	int32 ip_address = 0;
 
 	if(name == NULL)
@@ -1732,9 +1706,9 @@ char *name;
 
 	/* multi-homed hosts are handled here */
 	if(rrlp != NULL && rrlp->next != NULL) {
-		register struct rr *rrp;
-		register struct route *rp;
-		uint16 cost = MAXINT16;
+		struct rr *rrp;
+		struct route *rp;
+		uint cost = MAXINT16;
 		rrp = rrlp;
 		/* choose the best of a set of routes */
 		while(rrp != NULL) {
@@ -1748,7 +1722,7 @@ char *name;
 		}
 	}
 
-	free_rr(rrlp);
+	free_rr(&rrlp);
 	return ip_address;
 }
 
@@ -1757,13 +1731,12 @@ char *name;
  * Returns 0 if name is currently unresolvable.
  */
 int32
-resolve_mx(name)
-char *name;
+resolve_mx(char *name)
 {
-	register struct rr *rrp, *arrp;
+	struct rr *rrp, *arrp;
 	char *sname, *tmp, *cp;
 	int32 addr, ip_address = 0;
-	uint16 pref = MAXINT16;
+	uint pref = MAXINT16;
 
 	if(name == NULL)
 		return 0;
@@ -1787,7 +1760,7 @@ char *name;
 			}
 			rrp = rrp->next;
 		}
-		free_rr(arrp);
+		free_rr(&arrp);
 		if(ip_address != 0)
 			break;
 		/* Compose wild card one level up */
@@ -1795,11 +1768,11 @@ char *name;
 			break;
 		tmp = mallocw(strlen(cp)+2);
 		sprintf(tmp,"*%s",cp);		/* wildcard expansion */
-		free(sname);
+		FREE(sname);
 		sname = tmp;
 		cp = sname + 2;
 	}
-	free(sname);
+	FREE(sname);
 	return ip_address;
 }
 
@@ -1807,10 +1780,9 @@ char *name;
  * matching records.
  */
 struct rr *
-resolve_mailb(name)
-char *name;		/* local username, without trailing dot */
+resolve_mailb(char *name)	/* local username, without trailing dot */
 {
-	register struct rr *result_rrlp;
+	struct rr *result_rrlp;
 	struct rr *rrlp;
 	char *sname;
 
@@ -1824,7 +1796,7 @@ char *name;		/* local username, without trailing dot */
 	if((result_rrlp = dcache_search(rrlp)) == NULL){
 		result_rrlp = dfile_search(rrlp);
 	}
-	free_rr(rrlp);
+	free_rr(&rrlp);
 	if(Dsuffix != NULL){
 		rrlp = result_rrlp;
 		while(rrlp != NULL){	/* add domain suffix to data */
@@ -1833,7 +1805,7 @@ char *name;		/* local username, without trailing dot */
 				sname = mallocw(rrlp->rdlength +
 					strlen(Dsuffix)+2);
 				sprintf(sname,"%s.%s",rrlp->rdata.name,Dsuffix);
-				free(rrlp->rdata.name);
+				FREE(rrlp->rdata.name);
 				rrlp->rdata.name = sname;
 				rrlp->rdlength = strlen(sname);
 			}

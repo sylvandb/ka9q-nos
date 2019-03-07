@@ -21,9 +21,7 @@ static void t_alarm(void *x);
 
 /* Process that handles clock ticks */
 void
-timerproc(i,v1,v2)
-int i;
-void *v1,*v2;
+timerproc(int i,void *v1,void *v2)
 {
 	register struct timer *t;
 	register struct timer *expired;
@@ -35,7 +33,7 @@ void *v1,*v2;
 	for(;;){
 		/* Atomic read and decrement of Tick */
 		for(;;){
-			i_state = dirps();
+			i_state = disable();
 			tmp = Tick;
 			if(tmp != 0){
 				Tick--;
@@ -97,8 +95,7 @@ void *v1,*v2;
 }
 /* Start a timer */
 void
-start_timer(t)
-struct timer *t;
+start_timer(struct timer *t)
 {
 	register struct timer *tnext;
 	struct timer *tprev = NULL;
@@ -134,8 +131,7 @@ struct timer *t;
 }
 /* Stop a timer */
 void
-stop_timer(timer)
-struct timer *timer;
+stop_timer(struct timer *timer)
 {
 	register struct timer *t;
 	struct timer *tlast = NULL;
@@ -161,8 +157,7 @@ struct timer *timer;
 }
 /* Return milliseconds remaining on this timer */
 int32
-read_timer(t)
-struct timer *t;
+read_timer(struct timer *t)
 {
 	int32 remaining;
 
@@ -175,9 +170,7 @@ struct timer *t;
 		return remaining * MSPTICK;
 }
 void
-set_timer(t,interval)
-struct timer *t;
-int32 interval;
+set_timer(struct timer *t,int32 interval)
 {
 	if(t == NULL)
 		return;
@@ -195,8 +188,7 @@ int32 interval;
  * Normally returns 0; returns -1 if aborted by alarm.
  */
 int
-ppause(ms)
-int32 ms;
+ppause(int32 ms)
 {
 	int val;
 
@@ -212,15 +204,13 @@ int32 ms;
 	return (val == EALARM) ? 0 : -1;
 }
 static void
-t_alarm(x)
-void *x;
+t_alarm(void *x)
 {
 	alert((struct proc *)x,EALARM);
 }
 /* Send signal to current process after specified number of milliseconds */
 void
-kalarm(ms)
-int32 ms;
+kalarm(int32 ms)
 {
 	if(Curproc != NULL){
 		set_timer(&Curproc->alarm,ms);
@@ -231,8 +221,7 @@ int32 ms;
 }
 /* Convert time count in seconds to printable days:hr:min:sec format */
 char *
-tformat(t)
-int32 t;
+tformat(int32 t)
 {
 	static char buf[17],*cp;
 	unsigned int days,hrs,mins,secs;

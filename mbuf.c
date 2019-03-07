@@ -22,7 +22,7 @@ static struct mbuf *Mbufcache[3];
 
 /* Allocate mbuf with associated buffer of 'size' bytes */
 struct mbuf *
-alloc_mbuf(uint16 size)
+alloc_mbuf(uint size)
 {
 	struct mbuf *bp = NULL;
 	int i;
@@ -46,7 +46,7 @@ alloc_mbuf(uint16 size)
 		i = 3;
 
 	if(i < 3){
-		i_state = dirps();
+		i_state = disable();
 		if(Mbufcache[i] != NULL){
 			bp = Mbufcache[i];
 			Mbufcache[i] = bp->anext;
@@ -67,7 +67,7 @@ alloc_mbuf(uint16 size)
 }
 /* Allocate mbuf, waiting if memory is unavailable */
 struct mbuf *
-ambufw(uint16 size)
+ambufw(uint size)
 {
 	struct mbuf *bp = NULL;
 	int i,i_state;
@@ -89,7 +89,7 @@ ambufw(uint16 size)
 		i = 3;
 
 	if(i < 3){
-		i_state = dirps();
+		i_state = disable();
 		if(Mbufcache[i] != NULL){
 			bp = Mbufcache[i];
 			Mbufcache[i] = bp->anext;
@@ -110,21 +110,19 @@ ambufw(uint16 size)
 
 /* Decrement the reference pointer in an mbuf. If it goes to zero,
  * free all resources associated with mbuf.
- * Return pointer to next mbuf in packet chain
+ * Modify arg to point to next mbuf in packet chain, if any
  */
-struct mbuf *
+void
 free_mbuf(struct mbuf **bpp)
 {
-	struct mbuf *bpnext;
 	struct mbuf *bptmp;
 	struct mbuf *bp;
 	int i_state;
 
 	if(bpp == NULL || (bp = *bpp) == NULL)
-		return NULL;
+		return;
+	*bpp = bp->next;
 
-	*bpp = NULL;
-	bpnext = bp->next;
 	if(bp->dup != NULL){
 		bptmp = bp->dup;
 		bp->dup = NULL;	/* Nail it before we recurse */
@@ -134,7 +132,7 @@ free_mbuf(struct mbuf **bpp)
 	if(--bp->refcnt <= 0){
 		Freembufs++;
 
-		i_state = dirps();
+		i_state = disable();
 		switch(bp->size){
 		case SMALL_MBUF:
 			bp->anext = Mbufcache[0];
@@ -154,7 +152,6 @@ free_mbuf(struct mbuf **bpp)
 		}
 		restore(i_state);
 	}
-	return bpnext;
 }
 
 /* Free packet (a chain of mbufs). Return pointer to next packet on queue,
@@ -164,13 +161,13 @@ struct mbuf *
 free_p(struct mbuf **bpp)
 {
 	struct mbuf *bp;   
-	register struct mbuf *abp;
+	struct mbuf *abp;
 
 	if(bpp == NULL || (bp = *bpp) == NULL)
 		return NULL;
 	abp = bp->anext;
 	while(bp != NULL)
-		bp = free_mbuf(&bp);
+		free_mbuf(&bp);
 	*bpp = NULL;
 	return abp;
 }		
@@ -185,10 +182,10 @@ free_q(struct mbuf **q)
 }
 
 /* Count up the total number of bytes in a packet */
-uint16
+uint
 len_p(struct mbuf *bp)
 {
-	register uint16 cnt = 0;
+	uint cnt = 0;
 
 	while(bp != NULL){
 		cnt += bp->cnt;
@@ -197,10 +194,10 @@ len_p(struct mbuf *bp)
 	return cnt;
 }
 /* Count up the number of packets in a queue */
-uint16
+uint
 len_q(struct mbuf *bp)
 {
-	register uint16 cnt;
+	uint cnt;
 
 	for(cnt=0;bp != NULL;cnt++,bp = bp->anext)
 		;
@@ -208,10 +205,10 @@ len_q(struct mbuf *bp)
 }
 /* Trim mbuf to specified length by lopping off end */
 void
-trim_mbuf(struct mbuf **bpp,uint16 length)
+trim_mbuf(struct mbuf **bpp,uint length)
 {
-	register uint16 tot = 0;
-	register struct mbuf *bp;
+	uint tot = 0;
+	struct mbuf *bp;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;	/* Nothing to trim */
@@ -245,15 +242,15 @@ trim_mbuf(struct mbuf **bpp,uint16 length)
  * passed back through the first argument, and the return value is the
  * number of bytes actually duplicated.
  */
-uint16
+uint
 dup_p(
 struct mbuf **hp,
-register struct mbuf *bp,
-register uint16 offset,
-register uint16 cnt
+struct mbuf *bp,
+uint offset,
+uint cnt
 ){
 	struct mbuf *cp;
-	uint16 tot;
+	uint tot;
 
 	if(cnt == 0 || bp == NULL || hp == NULL){
 		if(hp != NULL)
@@ -301,12 +298,12 @@ register uint16 cnt
 /* Copy first 'cnt' bytes of packet into a new, single mbuf */
 struct mbuf *
 copy_p(
-register struct mbuf *bp,
-register uint16 cnt
+struct mbuf *bp,
+uint cnt
 ){
-	register struct mbuf *cp;
-	register uint8 *wp;
-	register uint16 n;
+	struct mbuf *cp;
+	uint8 *wp;
+	uint n;
 
 	if(bp == NULL || cnt == 0 || (cp = alloc_mbuf(cnt)) == NULL)
 		return NULL;
@@ -324,20 +321,20 @@ register uint16 cnt
 /* Copy and delete "cnt" bytes from beginning of packet. Return number of
  * bytes actually pulled off
  */
-uint16
+uint
 pullup(
 struct mbuf **bph,
 void *buf,
-uint16 cnt
+uint cnt
 ){
 	struct mbuf *bp;
-	uint16 n,tot;
+	uint n,tot;
 	uint8 *obp = buf;
 
 	tot = 0;
-	if(bph == NULL)
+	if(bph == NULL || (bp = *bph) == NULL)
 		return 0;
-	while(cnt != 0 && (bp = *bph) != NULL){
+	while(cnt != 0 && bp != NULL){
 		n = min(cnt,bp->cnt);
 		if(obp != NULL){
 			if(n == 1){	/* Common case optimization */
@@ -352,16 +349,8 @@ uint16 cnt
 		bp->data += n;
 		bp->cnt -= n;		
 		if(bp->cnt == 0){
-			/* If this is the last mbuf of a packet but there
-			 * are others on the queue, return a pointer to
-			 * the next on the queue. This allows pullups to
-			 * to work on a packet queue
-			 */
-			if(bp->next == NULL && bp->anext != NULL){
-				*bph = bp->anext;
-				free_mbuf(&bp);
-			} else
-				*bph = free_mbuf(&bp);
+			free_mbuf(&bp);
+			*bph = bp;
 		}
 	}
 	return tot;
@@ -370,16 +359,16 @@ uint16 cnt
  * 'offset' bytes from start of mbuf and copying no more than 'len'
  * bytes. Return actual number of bytes copied
  */
-uint16
+uint
 extract(
 struct mbuf *bp,
-uint16 offset,
+uint offset,
 void *buf,
-uint16 len
+uint len
 ){
 	uint8 *obp = buf;
-	uint16 copied = 0;
-	uint16 n;
+	uint copied = 0;
+	uint n;
 
 	/* Skip over offset if greater than first mbuf(s) */
 	while(bp != NULL && offset >= bp->cnt){
@@ -404,7 +393,7 @@ append(
 struct mbuf **bph,
 struct mbuf **bpp
 ){
-	register struct mbuf *p;
+	struct mbuf *p;
 
 	if(bph == NULL || bpp == NULL || *bpp == NULL)
 		return;
@@ -427,12 +416,12 @@ struct mbuf **bpp
  * This operation is the logical inverse of pullup(), hence the name.
  */
 void
-pushdown(struct mbuf **bpp,void *buf,uint16 size)
+pushdown(struct mbuf **bpp,void *buf,uint size)
 {
 	struct mbuf *bp;
 
 	Pushdowns++;
-	if(bpp == NULL)
+	if(bpp == NULL || size == 0)
 		return;
 	/* Check that bp is real, that it hasn't been duplicated, and
 	 * that it itself isn't a duplicate before checking to see if
@@ -459,12 +448,12 @@ enqueue(
 struct mbuf **q,
 struct mbuf **bpp
 ){
-	register struct mbuf *p;
+	struct mbuf *p;
 	uint8 i_state;
 
 	if(q == NULL || bpp == NULL || *bpp == NULL)
 		return;
-	i_state = dirps();
+	i_state = disable();
 	if(*q == NULL){
 		/* List is empty, stick at front */
 		*q = *bpp;
@@ -481,12 +470,12 @@ struct mbuf **bpp
 struct mbuf *
 dequeue(struct mbuf **q)
 {
-	register struct mbuf *bp;
+	struct mbuf *bp;
 	uint8 i_state;
 
 	if(q == NULL)
 		return NULL;
-	i_state = dirps();
+	i_state = disable();
 	if((bp = *q) != NULL){
 		*q = bp->anext;
 		bp->anext = NULL;
@@ -497,9 +486,9 @@ dequeue(struct mbuf **q)
 
 /* Copy user data into an mbuf */
 struct mbuf *
-qdata(void *data,uint16 cnt)
+qdata(const void *data,uint cnt)
 {
-	register struct mbuf *bp;
+	struct mbuf *bp;
 
 	bp = ambufw(cnt);
 	memcpy(bp->data,data,cnt);
@@ -618,7 +607,7 @@ mbuf_garbage(int red)
 
 	/* Blow entire cache */
 	for(i=0;i<3;i++){
-		i_state = dirps();		
+		i_state = disable();		
 		while((bp = Mbufcache[i]) != NULL){
 			Mbufcache[i] = bp->anext;
 			free(bp);

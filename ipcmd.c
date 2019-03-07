@@ -113,8 +113,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register int i,bits;
-	register struct route *rp;
+	int i,bits;
+	struct route *rp;
 
 	if(argc >= 2)
 		return subcmd(Rtcmds,argc,argv,p);
@@ -241,7 +241,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct route *rp;
+	struct route *rp;
 	struct route *rptmp;
 	int i,j;
 	
@@ -262,8 +262,7 @@ void *p;
 }
 /* Dump a routing table entry */
 static int
-dumproute(rp)
-register struct route *rp;
+dumproute(struct route *rp)
 {
 	char *cp;
 
@@ -314,8 +313,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct reasm *rp;
-	register struct frag *fp;
+	struct reasm *rp;
+	struct frag *fp;
 	int i;
 
 	for(i=1;i<=NUMIPMIB;i++){

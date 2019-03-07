@@ -5,7 +5,6 @@
 #include <conio.h>
 #include <dir.h>
 #include <dos.h>
-#include <io.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <process.h>
@@ -14,6 +13,9 @@
 #include <stdarg.h>
 #include <bios.h>
 #include <time.h>
+#include <dpmi.h>
+#include <signal.h>
+#include <crt0.h>
 #include "global.h"
 #include "mbuf.h"
 #include "proc.h"
@@ -28,39 +30,37 @@
 
 static void statline(struct display *dp,struct session *sp);
 
+int _go32_dpmi_unchain_protected_mode_interrupt_vector(uint irq,_go32_dpmi_seginfo *info);
+void eoi(void);
+
 extern int Curdisp;
 extern struct proc *Display;
-unsigned _stklen = 8192;
-int Tick;
-static int32 Clock;
-extern INTERRUPT (*Kbvec)();
-
-/* This flag is set by setirq() if IRQ 8-15 is used, indicating
- * that the machine is a PC/AT with a second 8259 interrupt controller.
- * If this flag is set, the interrupt return code in pcgen.asm will
- * send an End of Interrupt command to the second 8259 as well as the
- * first.
- */
-#ifdef	CPU386
-int Isat = 1;
-#else
-int Isat;
-#endif
+volatile int Tick;
+volatile int32 Clock;
 
 static int saved_break;
 
-int
-errhandler(errval,ax,bp,si)
-int errval,ax,bp,si;
-{
-	return 3;	/* Fail the system call */
-}
+struct int_tab {
+	__dpmi_paddr old;	/* Previous handler at this vector */
+	_go32_dpmi_seginfo new;	/* Current handler, with wrapper info */
+	void (*func)(int);	/* Function to call on interrupt */
+	int arg;		/* Arg to pass to interrupt function */
+	int chain;		/* Is interrupt chained to old handler? */
+} Int_tab[16];
 
-/* Called at startup time to set up console I/O, memory heap */
+
+/* Called at startup time to set up misc I/O related functions */
 void
-ioinit()
+ioinit(int hinit)
 {
 	union REGS inregs;
+	extern int _fmode;
+
+	_fmode = O_BINARY;
+	/* Get some memory on the heap so interrupt calls to malloc
+	 * won't fail unnecessarily
+	 */
+	free(malloc(hinit));
 
 	/* Increase the size of the file table.
 	 * Note: this causes MS-DOS
@@ -76,33 +76,19 @@ ioinit()
 	inregs.x.bx = Nfiles;	/* Up to the base of the socket numbers */
 	intdos(&inregs,&inregs);	
 
-	/* Allocate space for the fd reference count table */
-	Refcnt = (unsigned *)calloc(sizeof(unsigned),Nfiles);
-
-	Refcnt[3] = 1;
-	Refcnt[4] = 1;
-	_close(3);
-	_close(4);
-
-	/* Fail all I/O errors */
-	harderr(errhandler);
-
 	saved_break = getcbrk();
 	setcbrk(0);
+	signal(SIGINT,SIG_IGN);
 
-	/* Link timer handler into timer interrupt chain */
-	chtimer(btick);
+	/* Chain protected mode keyboard interrupt */
+	setvect(1,1,kbint,0);
 
-	/* Find out what multitasker we're running under, if any */
-	chktasker();
-
-	/* Hook keyboard interrupt */
-	Kbvec = getirq(KBIRQ);
-	setirq(KBIRQ,kbint);
+	/* Chain timer interrupt */
+	setvect(0,1,ctick,0);
 }
 /* Called just before exiting to restore console state */
 void
-iostop()
+iostop(void)
 {
 	struct iface *ifp,*iftmp;
 	void (**fp)(void);
@@ -118,23 +104,11 @@ iostop()
 		(**fp)();
 	}
 	fcloseall();
-	setirq(KBIRQ,Kbvec);	/* Restore original keyboard vec */
-}
-/* Spawn subshell */
-int
-doshell(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	char *command;
-	int ret;
-
-	if((command = getenv("COMSPEC")) == NULL)
-		command = "/COMMAND.COM";
-	ret = spawnv(P_WAIT,command,argv);
-
-	return ret;
+#ifndef	notdef	/* Can't unchain interrupts with current DJGPP lib */
+	/* Restore previous timer and keyboard interrupts */
+	freevect(0);
+	freevect(1);
+#endif
 }
 
 /* Read characters from the keyboard, translating them to "real" ASCII.
@@ -142,12 +116,12 @@ void *p;
  * above 256, e.g., F-10 is 256 + 68 = 324.
  */
 int
-kbread()
+kbread(void)
 {
-	uint16 c;
+	uint c;
 
 	while((c = kbraw()) == 0)
-		kwait(&Kbvec);
+		kwait(&kbint);
 
 	rtype(c);	/* Randomize random number state */
 
@@ -167,46 +141,9 @@ kbread()
 	}
 	return c;
 }
-/* Install hardware interrupt handler.
- * Takes IRQ numbers from 0-7 (0-15 on AT) and maps to actual 8086/286 vectors
- * Note that bus line IRQ2 maps to IRQ9 on the AT
- */
-int
-setirq(irq,handler)
-unsigned irq;
-INTERRUPT (*handler)();
-{
-	/* Set interrupt vector */
-	if(irq < 8){
-		setvect(8+irq,handler);
-	} else if(irq < 16){
-		Isat = 1;
-		setvect(0x70 + irq - 8,handler);
-	} else {
-		return -1;
-	}
-	return 0;
-}
-/* Return pointer to hardware interrupt handler.
- * Takes IRQ numbers from 0-7 (0-15 on AT) and maps to actual 8086/286 vectors
- */
-INTERRUPT
-(*getirq(irq))()
-unsigned int irq;
-{
-	/* Set interrupt vector */
-	if(irq < 8){
-		return getvect(8+irq);
-	} else if(irq < 16){
-		return getvect(0x70 + irq - 8);
-	} else {
-		return NULL;
-	}
-}
 /* Disable hardware interrupt */
 int
-maskoff(irq)
-unsigned irq;
+maskoff(uint irq)
 {
 	if(irq < 8){
 		setbit(0x21,(char)(1<<irq));
@@ -220,14 +157,13 @@ unsigned irq;
 }
 /* Enable hardware interrupt */
 int
-maskon(irq)
-unsigned irq;
+maskon(uint irq)
  {
 	if(irq < 8){
-		clrbit(0x21,(char)(1<<irq));
+		clrbit(0x21,1<<irq);
 	} else if(irq < 16){
 		irq -= 8;
-		clrbit(0xa1,(char)(1<<irq));
+		clrbit(0xa1,1<<irq);
 	} else {
 		return -1;
 	}
@@ -235,8 +171,7 @@ unsigned irq;
 }
 /* Return 1 if specified interrupt is enabled, 0 if not, -1 if invalid */
 int
-getmask(irq)
-unsigned irq;
+getmask(unsigned irq)
 {
 	if(irq < 8)
 		return (inportb(0x21) & (1 << irq)) ? 0 : 1;
@@ -250,22 +185,22 @@ unsigned irq;
  * hardware clock tick. Signal a clock tick to the timer process.
  */
 void
-ctick()
+ctick(int unused)
 {
 	Tick++;
 	Clock++;
-	ksignal(&Tick,1);
+	ksignal((void *)&Tick,1);
 }
 /* Read the Clock global variable, with interrupts off to avoid possible
  * inconsistency on 16-bit machines
  */
 int32
-rdclock()
+rdclock(void)
 {
 	int i_state;
 	int32 rval;
 
-	i_state = dirps();
+	i_state = disable();
 	rval = Clock;
 	restore(i_state);
 	return rval;
@@ -275,7 +210,7 @@ rdclock()
  * can NOT be called at interrupt time because it calls the BIOS
  */
 void
-pctick()
+pctick(void)
 {
 	long t;
 	static long oldt;	/* Value of bioscnt() on last call */
@@ -290,28 +225,24 @@ pctick()
 
 /* Set bit(s) in I/O port */
 void
-setbit(port,bits)
-unsigned port;
-char bits;
+setbit(uint port,uint8 bits)
 {
 	outportb(port,inportb(port)|bits);
 }
 /* Clear bit(s) in I/O port */
 void
-clrbit(port,bits)
-unsigned port;
-char bits;
+clrbit(uint port,uint8 bits)
 {
 	outportb(port,inportb(port) & ~bits);
 }
 /* Set or clear selected bits(s) in I/O port */
 void
-writebit(port,mask,val)
-unsigned port;
-char mask;
-int val;
-{
-	register char x;
+writebit(
+uint port,
+uint8 mask,
+int val
+){
+	uint8 x;
 
 	x = inportb(port);
 	if(val)
@@ -320,99 +251,9 @@ int val;
 		x &= ~mask;
 	outportb(port,x);
 }
-void *
-ltop(l)
-long l;
-{
-	register unsigned seg,offset;
-
-	seg = l >> 16;
-	offset = l;
-	return MK_FP(seg,offset);
-}
-#ifdef	notdef	/* Assembler versions in pcgen.asm */
-/* Multiply a 16-bit multiplier by an arbitrary length multiplicand.
- * Product is left in place of the multiplicand, and the carry is
- * returned
- */
-uint16
-longmul(multiplier,n,multiplicand)
-uint16 multiplier;
-int n;				/* Number of words in multiplicand[] */
-register uint16 *multiplicand;	/* High word is in multiplicand[0] */
-{
-	register int i;
-	unsigned long pc;
-	uint16 carry;
-
-	carry = 0;
-	multiplicand += n;
-	for(i=n;i != 0;i--){
-		multiplicand--;
-		pc = carry + (unsigned long)multiplier * *multiplicand;
-		*multiplicand = pc;
-		carry = pc >> 16;
-	}
-	return carry;
-}
-/* Divide a 16-bit divisor into an arbitrary length dividend using
- * long division. The quotient is returned in place of the dividend,
- * and the function returns the remainder.
- */
-uint16
-longdiv(divisor,n,dividend)
-uint16 divisor;
-int n;				/* Number of words in dividend[] */
-register uint16 *dividend;	/* High word is in dividend[0] */
-{
-	/* Before each division, remquot contains the 32-bit dividend for this
-	 * step, consisting of the 16-bit remainder from the previous division
-	 * in the high word plus the current 16-bit dividend word in the low
-	 * word.
-	 *
-	 * Immediately after the division, remquot contains the quotient
-	 * in the low word and the remainder in the high word (which is
-	 * exactly where we need it for the next division).
-	 */
-	unsigned long remquot;
-	register int i;
-
-	if(divisor == 0)
-		return 0;	/* Avoid divide-by-zero crash */
-	remquot = 0;
-	for(i=0;i<n;i++,dividend++){
-		remquot |= *dividend;
-		if(remquot == 0)
-			continue;	/* Avoid unnecessary division */
-#ifdef	__TURBOC__
-		/* Use assembly lang routine that returns both quotient
-		 * and remainder, avoiding a second costly division
-		 */
-		remquot = divrem(remquot,divisor);
-		*dividend = remquot;	/* Extract quotient in low word */
-		remquot &= ~0xffffL;	/* ... and mask it off */
-#else
-		*dividend = remquot / divisor;
-		remquot = (remquot % divisor) << 16;
-#endif
-	}
-	return remquot >> 16;
-}
-#endif
-void
-sysreset()
-{
-	void (*foo)(void);
-
-	foo = MK_FP(0xffff,0);	/* FFFF:0000 is hardware reset vector */
-	(*foo)();
-}
 
 void
-display(i,v1,v2)
-int i;
-void *v1;
-void *v2;
+display(int i,void *v1,void *v2)
 {
 	struct session *sp;
 	struct display *dp;
@@ -439,15 +280,9 @@ void *v2;
 	}
 }
 
-/* Compose status line for bottom of screen
- * Return 1 if session has unacked data and status should be polled,
- * 0 otherwise.
- *
- */
+/* Compose status line for bottom of screen */
 static void
-statline(dp,sp)
-struct display *dp;
-struct session *sp;
+statline(struct display *dp,struct session *sp)
 {
 	int attr;
 	char buf[81];
@@ -468,25 +303,27 @@ struct session *sp;
 		if(sp->type == FTP && (s1 = fileno(sp->cb.ftp->data)) != -1)
 			unack += socklen(s1,1);
 	}
-	sprintf(buf,"%2d: %s",sp->index,sp->name);
-	statwrite(dp,0,buf,strlen(buf),attr);
+	memset(buf,' ',80);
+	buf[80] = '\0';
+	sprintf(&buf[0],"%2d: %s",sp->index,sp->name);
 
 	if(dp->flags.scrollbk){
-		sprintf(buf,"Scroll:%-5lu",dp->sfoffs);
+		int off;
+		off = dp->virttop - dp->realtop;
+		if(off < 0)
+			off += dp->size;
+		sprintf(&buf[54],"Scroll:%-5u",off);
 	} else if(s != -1 && unack != 0){
-		sprintf(buf,"Unack: %-5u",unack);
+		sprintf(&buf[54],"Unack: %-5u",unack);
 	} else
-		sprintf(buf,"            ");
-	statwrite(dp,54,buf,strlen(buf),attr);
-	sprintf(buf,"F8:nxt F10:cmd");
-	statwrite(dp,66,buf,strlen(buf),attr);
+		sprintf(&buf[54],"            ");
+	sprintf(&buf[66],"F8:nxt F10:cmd");
+	statwrite(0,buf,sizeof(buf)-1,attr);
 }
 
-/* Return time since startup in milliseconds. If the system has an
- * 8254 clock chip (standard on ATs and up) then resolution is improved
+/* Return time since startup in milliseconds. Resolution is improved
  * below 55 ms (the clock tick interval) by reading back the instantaneous
- * value of the counter and combining it with the global clock tick counter.
- * Otherwise 55 ms resolution is provided.
+ * 8254 counter value and combining it with the global clock tick counter.
  *
  * Reading the 8254 is a bit tricky since a tick could occur asynchronously
  * between the two reads. The tick counter is examined before and after the
@@ -494,59 +331,42 @@ struct session *sp;
  * Note: the hardware counter counts down from 65536.
  */
 int32
-msclock()
+msclock(void)
 {
 	int32 hi;
-	uint16 lo;
-	uint16 count[4];	/* extended (48-bit) counter of timer clocks */
-
-	if(!Isat)
-		return rdclock() * MSPTICK;
+	uint lo;
+	uint64 x;
 
 	do {
 		hi = rdclock();
 		lo = clockbits();
 	} while(hi != rdclock());
 
-	count[0] = 0;
-	count[1] = hi >> 16;
-	count[2] = hi;
-	count[3] = -lo;
-	longmul(11,4,count);	/* The ratio 11/13125 is exact */
-	longdiv(13125,4,count);
-	return ((long)count[2] << 16) + count[3];
+	x = ((uint64)hi << 16) - lo;
+	return (x * 11) / 13125;
 }
 /* Return clock in seconds */
 int32
-secclock()
+secclock(void)
 {
 	int32 hi;
-	uint16 lo;
-	uint16 count[4];	/* extended (48-bit) counter of timer clocks */
-
-	if(!Isat)
-		return (rdclock() * MSPTICK) / 1000L;
+	uint lo;
+	uint64 x;
 
 	do {
 		hi = rdclock();
 		lo = clockbits();
 	} while(hi != rdclock());
 
-	count[0] = 0;
-	count[1] = hi >> 16;
-	count[2] = hi;
-	count[3] = -lo;
-	longmul(11,4,count);	/* The ratio 11/13125 is exact */
-	longdiv(13125,4,count);
-	longdiv(1000,4,count);	/* Convert to seconds */
-	return ((long)count[2] << 16) + count[3];
+	x = ((uint64)hi << 16) - lo;
+	return (x * 11) / 13125000;
 }
 /* Return time in raw clock counts, approx 838 ns */
 int32
-usclock()
+usclock(void)
 {
 	int32 hi;
-	uint16 lo;
+	uint lo;
 
 	do {
 		hi = rdclock();
@@ -556,51 +376,22 @@ usclock()
 	return (hi << 16) - (int32)lo;
 }
 
-
-#if !defined(CPU386)	/* 386s and above always have an AT bus */
-int
-doisat(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	return setbool(&Isat,"AT/386 mode",argc,argv);
-}
-#endif
 /* Directly read BIOS count of time ticks. This is used instead of
  * calling biostime(0,0L). The latter calls BIOS INT 1A, AH=0,
  * which resets the midnight overflow flag, losing days on the clock.
  */
 long
-bioscnt()
+bioscnt(void)
 {
 	long rval;
 	int i_state;
 
-	i_state = dirps();
-	rval = * (long far *)MK_FP(0x40,0x6c);
+	i_state = disable();
+	dosmemget(0x46c,sizeof(rval),&rval);
 	restore(i_state);
 	return rval;
 }
-/* Null stub to replace Borland C++ library function called at startup time
- * to setup the stdin/stdout/stderr streams
- */
-void
-_setupio()
-{
-}
 
-/* Return 1 if running in interrupt context, 0 otherwise. Works by seeing if
- * the stack pointer is inside the interrupt stack
- */
-int
-intcontext()
-{
-	if(_SS == FP_SEG(Intstk)
-	 && _SP >= FP_OFF(Intstk) && _SP <= FP_OFF(Stktop))
-		return 1;
-	return 0;
-}
 /* Atomic read-and-decrement operation.
  * Read the variable pointed to by p. If it is
  * non-zero, decrement it. Return the original value.
@@ -612,10 +403,279 @@ volatile int *p;
 	int tmp;
 	int i_state;
 
-	i_state = dirps();
+	i_state = disable();
 	tmp = *p;
 	if(tmp != 0)
 		(*p)--;
 	restore(i_state);
 	return tmp;
+}
+void
+restore(int state)
+{
+	state ? enable() : disable();
+}
+int
+istate(void)
+{
+  long flags;
+  asm ("pushfl\n\t"		/* We save the old ccr, which has interrupt mask bit. */
+       "popl %0\n\t" : "=r" (flags));
+  return (flags >> 9) & 1;
+}
+
+/* This function is called by exit() in the GCC libc. We define
+ * it here to supersede the one defined in libc's stdio
+ */
+void
+_cleanup(void)
+{
+	fcloseall();
+}
+
+/* clockbits - Read low order bits of timer 0 (the TOD clock)
+ * This works only for the 8254 chips used in ATs and 386s.
+ *
+ * The timer runs in mode 3 (square wave mode), counting down
+ * by twos, twice for each cycle. So it is necessary to read back the
+ * OUTPUT pin to see which half of the cycle we're in. I.e., the OUTPUT
+ * pin forms the most significant bit of the count. Unfortunately,
+ * the 8253 in the PC/XT lacks a command to read the OUTPUT pin...
+ *
+ * The PC's clock design is soooo brain damaged...
+ */
+uint
+clockbits(void)
+{
+	int i_state;
+	unsigned int stat,count;
+
+	do {
+		i_state = disable();
+		outportb(0x43,0xc2);	/* latch timer 0 count and status for reading */
+		stat = inportb(0x40);	/* get status of timer 0 */
+		count = inportb(0x40);	/* lsb of count */
+		count |= inportb(0x40) << 8;	/* msb of count */
+		restore(i_state);	/* no more chip references */
+	} while(stat & 0x40);		/* reread if NULL COUNT bit set */
+	stat = (stat & 0x80) << 8;	/* Shift OUTPUT to msb of 16-bit word */
+	count >>= 1;			/* count /= 2 */
+	if(count == 0)
+		return stat ^ 0x8000;	/* return complement of OUTPUT bit */
+	else
+		return count | stat;	/* Combine OUTPUT with counter */
+}
+
+void
+kbint(int unused)
+{
+	ksignal(&kbint,1);
+}
+
+void
+giveup(void)
+{
+}
+void
+sysreset(void)
+{
+}
+
+uint
+lcsum(uint16 *buf,uint cnt)
+{
+	uint32 sum = 0;
+
+	while(cnt-- != 0)
+		sum += *buf++;
+	while(sum > 65535)
+		sum = (sum & 0xffff) + (sum >> 16);
+	return ((sum >> 8) | (sum << 8)) & 0xffff;
+}
+
+/* What a crock. All this inelegance should be replaced with something
+ * that figures out what interrupt is being serviced by reading the 8259.
+ */
+static void irq0(void)
+{
+	eoi();
+	(*Int_tab[0].func)(Int_tab[0].arg);
+}
+static void irq1(void)
+{
+	eoi();
+	(*Int_tab[1].func)(Int_tab[1].arg);
+}
+static void irq2(void)
+{
+	eoi();
+	(*Int_tab[2].func)(Int_tab[2].arg);
+}
+static void irq3(void)
+{
+	eoi();
+	(*Int_tab[3].func)(Int_tab[3].arg);
+}
+int Irq4s;
+static void irq4(void)
+{
+	disable();
+	Irq4s++;
+	eoi();
+	(*Int_tab[4].func)(Int_tab[4].arg);
+	enable();
+}
+static void irq5(void)
+{
+	eoi();
+	(*Int_tab[5].func)(Int_tab[5].arg);
+}
+static void irq6(void)
+{
+	eoi();
+	(*Int_tab[6].func)(Int_tab[6].arg);
+}
+static void irq7(void)
+{
+	eoi();
+	(*Int_tab[7].func)(Int_tab[7].arg);
+}
+static void irq8(void)
+{
+	eoi();
+	(*Int_tab[8].func)(Int_tab[8].arg);
+}
+static void irq9(void)
+{
+	eoi();
+	(*Int_tab[9].func)(Int_tab[9].arg);
+}
+static void irq10(void)
+{
+	eoi();
+	(*Int_tab[10].func)(Int_tab[10].arg);
+}
+static void irq11(void)
+{
+	eoi();
+	(*Int_tab[11].func)(Int_tab[11].arg);
+}
+static void irq12(void)
+{
+	eoi();
+	(*Int_tab[12].func)(Int_tab[12].arg);
+}
+static void irq13(void)
+{
+	eoi();
+	(*Int_tab[13].func)(Int_tab[13].arg);
+}
+static void irq14(void)
+{
+	eoi();
+	(*Int_tab[14].func)(Int_tab[14].arg);
+}
+static void irq15(void)
+{
+	eoi();
+	(*Int_tab[15].func)(Int_tab[15].arg);
+}
+
+static void (*Vectab[16])(void) = {
+	irq0,irq1,irq2,irq3,irq4,irq5,irq6,irq7,irq8,irq9,irq10,irq11,
+	irq12,irq13,irq14,irq15
+};
+
+int
+setvect(uint irq, int chain, void (*func)(int),int arg)
+{
+	struct int_tab *ip;
+	uint intno;
+	int i;
+
+	if(irq > 15)
+		return -1;	/* IRQ out of legal range */
+
+	ip = &Int_tab[irq];
+	if(ip->func != NULL)
+		return -1;	/* Already in use */
+	/* Convert irq to actual CPU interrupt vector */
+	intno = (irq < 8) ? irq + 8 : 0x70 + irq - 8;
+
+	__dpmi_get_protected_mode_interrupt_vector(intno,&ip->old);
+	ip->func = func;
+	ip->arg = arg;
+	ip->new.pm_offset = (int)Vectab[irq];
+	ip->new.pm_selector = _go32_my_cs();
+	ip->chain = chain;
+
+	if(chain)
+		return _go32_dpmi_chain_protected_mode_interrupt_vector(intno,&ip->new);
+
+	if(i =_go32_dpmi_allocate_iret_wrapper(&ip->new))
+		return i;
+	return _go32_dpmi_set_protected_mode_interrupt_vector(intno,&ip->new);
+}
+
+int
+freevect(uint irq)
+{
+	struct int_tab *ip;
+	int i;
+
+	if(irq > 15)
+		return -1;	/* IRQ out of legal range */
+
+	ip = &Int_tab[irq];
+	ip->func = NULL;
+	/* Convert irq to actual CPU interrupt vector */
+	irq = (irq < 8) ? irq + 8 : 0x70 + irq - 8;
+	if(ip->chain)
+		return _go32_dpmi_unchain_protected_mode_interrupt_vector(irq,&ip->new);
+	if(i = __dpmi_set_protected_mode_interrupt_vector(irq,&ip->old))
+		return i;
+	return _go32_dpmi_free_iret_wrapper(&ip->new);
+}
+/* Written to extend gopint.c in djgpp library */
+int
+_go32_dpmi_unchain_protected_mode_interrupt_vector(uint irq,_go32_dpmi_seginfo *info)
+{
+  __dpmi_paddr v;
+  char *stack;
+  char *wrapper;
+
+  __dpmi_get_protected_mode_interrupt_vector(irq,&v);
+  /* Sanity check: does the vector point into our program? A bug in gdb
+   * keeps us from hooking the keyboard interrupt when we run under its
+   * control. This test catches it.
+   */
+  if(v.selector != _go32_my_cs())
+	return -1;
+  wrapper = (char *)v.offset32;
+  /* Extract previous vector from the wrapper chainback area */
+  v.offset32 = *(long *)(wrapper + 0x5b);
+  v.selector = *(short *)(wrapper + 0x5f);
+  /* Extract stack base from address of _call_count variable in wrapper */
+  stack = (char *)(*(long *)(wrapper+0x0F) - 8);
+#define	STACK_WAS_MALLOCED	(1 << 0)
+
+  if (*(long *) stack & STACK_WAS_MALLOCED)
+      free(stack);
+  free(wrapper);
+  __dpmi_set_protected_mode_interrupt_vector(irq,&v);
+  return 0;
+}
+/* Re-arm 8259 interrupt controller(s)
+ * Should be called just after taking an interrupt, instead of just
+ * before returning. This is because the 8259 inputs are edge triggered, and
+ * new interrupts arriving during an interrupt service routine might be missed.
+ */
+void
+eoi(void)
+{
+	/* read in-service register from secondary 8259 */
+	outportb(0xa0,0x0b);
+	if(inportb(0xa0))
+		outportb(0xa0,0x20);	/* Send EOI to secondary 8259 */
+	outportb(0x20,0x20);	/* Send EOI to primary 8259 */
 }

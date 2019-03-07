@@ -10,9 +10,7 @@
  * Return -1 if error, 0 if OK.
  */
 int
-ntohnr4(hdr,bpp)
-register struct nr4hdr *hdr;
-struct mbuf **bpp;
+ntohnr4(struct nr4hdr *hdr,struct mbuf **bpp)
 {
 	uint8 tbuf[NR4MINHDR];
 	int i;
@@ -74,12 +72,11 @@ struct mbuf **bpp;
 
 /* Convert host-format level 4 header to network format */
 struct mbuf *
-htonnr4(hdr)
-register struct nr4hdr *hdr;
+htonnr4(struct nr4hdr *hdr)
 {
-	static uint16 hlen[NR4NUMOPS] = {5,20,6,5,5,5,5};
+	static uint hlen[NR4NUMOPS] = {5,20,6,5,5,5,5};
 	struct mbuf *rbuf;
-	register uint8 *cp;
+	uint8 *cp;
 	unsigned char opcode;
 
 	opcode = hdr->opcode & NR4OPCODE;

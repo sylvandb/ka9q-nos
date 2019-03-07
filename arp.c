@@ -33,7 +33,7 @@ enum arp_hwtype hardware,	/* Hardware type */
 int32 target,			/* Target IP address */
 struct mbuf **bpp		/* IP datagram to be queued if unresolved */
 ){
-	register struct arp_tab *arp;
+	struct arp_tab *arp;
 	struct ip ip;
 
 	if((arp = arp_lookup(hardware,target)) != NULL && arp->state == ARP_VALID)
@@ -116,7 +116,7 @@ struct mbuf **bpp
 			/* Swap sender's and target's (us) hardware and protocol
 			 * fields, and send the packet back as a reply
 			 */
-			memcpy(arp.thwaddr,arp.shwaddr,(uint16)arp.hwalen);
+			memcpy(arp.thwaddr,arp.shwaddr,(uint)arp.hwalen);
 			/* Mark the end of the sender's AX.25 address
 			 * in case he didn't
 			 */
@@ -146,7 +146,7 @@ struct mbuf **bpp
 		/* Otherwise, respond if the guy he's looking for is
 		 * published in our table.
 		 */
-		memcpy(arp.thwaddr,arp.shwaddr,(uint16)arp.hwalen);
+		memcpy(arp.thwaddr,arp.shwaddr,(uint)arp.hwalen);
 		memcpy(arp.shwaddr,ap->hw_addr,at->hwalen);
 		arp.tprotaddr = arp.sprotaddr;
 		arp.sprotaddr = ap->ip_addr;
@@ -191,7 +191,7 @@ uint8 *hw_addr;			/* Hardware address, if known; NULL otherwise */
 int pub;			/* Publish this entry? */
 {
 	struct mbuf *bp;
-	register struct arp_tab *ap;
+	struct arp_tab *ap;
 	struct arp_type *at;
 	unsigned hashval;
 
@@ -239,7 +239,7 @@ void
 arp_drop(p)
 void *p;
 {
-	register struct arp_tab *ap;
+	struct arp_tab *ap;
 
 	ap = (struct arp_tab *)p;
 	if(ap == NULL)
@@ -262,7 +262,7 @@ arp_lookup(hardware,ipaddr)
 enum arp_hwtype hardware;
 int32 ipaddr;
 {
-	register struct arp_tab *ap;
+	struct arp_tab *ap;
 
 	for(ap = Arp_tab[hash_ip(ipaddr)]; ap != NULL; ap = ap->next){
 		if(ap->ip_addr == ipaddr && ap->hardware == hardware)

@@ -26,6 +26,9 @@
 #define	DCOL	67
 #define	DSIZ	(81-DCOL)
 
+uint8 Statbuf[2*COLS];
+struct dirty Stdirt;
+
 uint8 fgattr[] = { 0, 4, 2, 14, 1, 5, 3, 7 };	/* Foreground attribs */
 uint8 bgattr[] = { 0, 4, 2, 6, 1, 5, 3, 7 };	/* Background attribs */
 
@@ -35,12 +38,15 @@ static void darg(struct display *dp,uint8 c);
 static void dchar(struct display *dp,uint8 c);
 static void dclreol(struct display *dp,int row,int col);
 static void dattrib(struct display *dp,int val);
-static uint8 *bufloc(struct display *dp,int row,int col);
+static uint8 *rbufloc(struct display *dp,int row,int col);
+static uint8 *vbufloc(struct display *dp,int row,int col);
 static void dinsline(struct display *dp);
 static void ddelline(struct display *dp);
 static void ddelchar(struct display *dp);
 static void dinsert(struct display *dp);
 static void dclreod(struct display *dp,int row,int col);
+static int sadjust(struct display *dp,int lines);
+
 
 extern struct proc *Display;
 
@@ -50,59 +56,52 @@ extern struct proc *Display;
  * with each new line. This can be handy for packet trace screens.
  */
 struct display *
-newdisplay(rows,cols,noscrol,sflimit)
-int rows,cols;	/* Size of new screen. 0,0 defaults to whole screen */
-int noscrol;	/* 1: old IBM-style wrapping instead of scrolling */
-int sflimit;	/* Scrollback file size, lines */
-{
+newdisplay(
+int rows,
+int cols,	/* Size of new screen. 0,0 defaults to whole screen */
+int noscrol,	/* 1: old IBM-style wrapping instead of scrolling */
+int size	/* Size of virtual screen, lines */
+){
 	struct display *dp;
 	struct text_info text_info;
 	int i;
 
 	gettextinfo(&text_info);
 	if(rows == 0)
-		rows = text_info.screenheight;
+		rows = text_info.screenheight - 1;/* room for stat line */
 	if(cols == 0)
 		cols = text_info.screenwidth;
 
 	dp = (struct display *)calloc(1,sizeof(struct display) +
-	 2*rows*cols + rows*sizeof(struct dirty) + cols);
+	 (rows+1)*sizeof(struct dirty) + cols);
 	dp->cookie = D_COOKIE;
-	dp->buf = (uint8 *)(dp + 1);
-	dp->dirty = (struct dirty *)(dp->buf + 2*rows*cols);
+	dp->buf = calloc(2,cols*size);
+	dp->dirty = (struct dirty *)(dp + 1);
 	dp->tabstops = (uint8 *)(dp->dirty + rows);
 	dp->rows = rows;
 	dp->cols = cols;
+	dp->virttop = dp->realtop = 0;
+	dp->size = size;
 
 	/* Set default tabs every 8 columns */
 	for(i=0;i<cols;i+= 8)
 		dp->tabstops[i] = 1;
-	/* Default scrolling region is all but last line of display,
-	 * which is reserved for a status display
-	 */
-	dp->slast = rows - 2;
 
 	dp->attrib = 0x7;	/* White on black, no blink or intensity */
 	dclrscr(dp);		/* Start with a clean slate */
-	dclreol(dp,rows-1,0);	/* Clear status line too */
 	dp->flags.dirty_cursor = 1;
 	dp->flags.no_scroll = noscrol;
-	if(sflimit != 0 && (dp->sfile = tmpfile()) == NULL)
-		sflimit = 0;	/* Out of handles? */
 
-	dp->sflimit = sflimit;
 	return dp;
 }
 
 /* Close a display - simply get rid of the memory */
 void
-closedisplay(dp)
-struct display *dp;
+closedisplay(struct display *dp)
 {
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
-	if(dp->sfile != NULL)
-		fclose(dp->sfile);
+	free(dp->buf);
 	free(dp);
 }
 
@@ -111,29 +110,27 @@ struct display *dp;
  * progress. Maximum of one line allowed, no control sequences
  */
 void
-statwrite(dp,col,buf,cnt,attrib)
-struct display *dp;	/* Virtual screen pointer */
-int col;		/* Starting column of write */
-void *buf;		/* Data to be written */
-int cnt;		/* Count */
-int attrib;		/* Screen attribute to be used */
-{
+statwrite(
+int col,		/* Starting column of write */
+void *buf,		/* Data to be written */
+int cnt,		/* Count */
+int attrib		/* Screen attribute to be used */
+){
 	uint8 *buf1 = buf;
-	uint8 *sp = bufloc(dp,dp->slast+1,col);
-	struct dirty *dirtp = &dp->dirty[dp->slast+1];
+	uint8 *sp = Statbuf;
 
 	/* Clip debug area if activated */
 	if(Kdebug && cnt > DCOL - col - 1)
 		cnt = DCOL - col - 1;
-	else if(cnt > dp->cols-col)
-		cnt = dp->cols - col;	/* Limit write to line length */
+	else if(cnt > COLS-col)
+		cnt = COLS - col;	/* Limit write to line length */
 
 	while(cnt-- != 0){
 		if(sp[0] != *buf1 || sp[1] != attrib){
-			if(col < dirtp->lcol)
-				dirtp->lcol = col; 
-			if(col > dirtp->rcol)
-				dirtp->rcol = col;
+			if(col < Stdirt.lcol)
+				Stdirt.lcol = col; 
+			if(col > Stdirt.rcol)
+				Stdirt.rcol = col;
 			sp[0] = *buf1;
 			sp[1] = attrib;
 		}
@@ -141,19 +138,26 @@ int attrib;		/* Screen attribute to be used */
 		sp += 2;
 		col++;
 	}
+	/* Display unscrolled status region */
+	if(Stdirt.lcol <= Stdirt.rcol){
+		puttext(Stdirt.lcol+1,ROWS,Stdirt.rcol+1,ROWS,
+		 Statbuf + 2*Stdirt.lcol);
+		Stdirt.lcol = COLS-1;
+		Stdirt.rcol = 0;
+	}
 }
 /* Write data to the virtual display. Does NOT affect the real screen -
  * dupdate(dp) must be called to copy the virtual screen to the real
  * screen.
  */
 void
-displaywrite(dp,buf,cnt)
-struct display *dp;	/* Virtual screen pointer */
-void *buf;		/* Data to be written */
-int cnt;		/* Count */
-{
+displaywrite(
+struct display *dp,	/* Virtual screen pointer */
+const void *buf,	/* Data to be written */
+int cnt			/* Count */
+){
 	uint8 c;
-	char *bufp = buf;
+	const char *bufp = buf;
 
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
@@ -183,43 +187,16 @@ int cnt;		/* Count */
  * at zero, the puttext() and gotoxy() library functions start at 1.
  */
 void
-dupdate(dp)
-struct display *dp;	/* Virtual screen pointer */
+dupdate(struct display *dp)
 {
-	int row,rows;
+	int row;
 	long sp;
-	uint8 *lbuf;
 	struct dirty *dirtp;
-	long offset;
 
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	offset = dp->flags.scrollbk ? dp->sfoffs : 0;
-
-	if(offset > 0 && dp->flags.dirty_screen){
-		/* Display from scrollback file */
-		sp = dp->sfseek - 2*offset*dp->cols;
-		if(sp < 0)
-			sp += 2*dp->sfsize*dp->cols;	/* Wrap back */
-		rows = min(offset,dp->slast+1);	/* # rows to read */
-		lbuf = malloc(2*dp->cols*rows);
-		fseek(dp->sfile,sp,SEEK_SET);
-		/* row = actual # rows read */
-		row = fread(lbuf,2*dp->cols,rows,dp->sfile);
-		if(row != 0)
-			puttext(1,1,dp->cols,row,lbuf);
-		if(row != rows){
-			/* Hit end of file; rewind and read the rest */
-			fseek(dp->sfile,0L,SEEK_SET);
-			fread(lbuf,2*dp->cols,rows-row,dp->sfile);
-			puttext(1,row+1,dp->cols,rows,lbuf);
-		}
-		free(lbuf);
-	}
-	/* Display from memory image of current screen (if visible) */
-	for(row = offset,dirtp = &dp->dirty[row];
-	 row<=dp->slast;row++,dirtp++){
+	for(row=0,dirtp=dp->dirty;row<dp->rows;row++,dirtp++){
 		if(dp->flags.dirty_screen){
 			/* Force display of all columns */
 			dirtp->lcol = 0;
@@ -227,146 +204,94 @@ struct display *dp;	/* Virtual screen pointer */
 		}
 		if(dirtp->lcol <= dirtp->rcol){
 			puttext(dirtp->lcol+1,row+1,dirtp->rcol+1,row+1,
-			 bufloc(dp,row-offset,dirtp->lcol));
+			 dp->flags.scrollbk ? rbufloc(dp,row,dirtp->lcol)
+				: vbufloc(dp,row,dirtp->lcol));
 			dirtp->lcol = dp->cols-1;
 			dirtp->rcol = 0;
 		}
 	}
-	/* Display unscrolled status region */
-	for(row=dp->slast+1,dirtp = &dp->dirty[row];row<dp->rows;row++,dirtp++){
-		if(dp->flags.dirty_screen){
-			dirtp->lcol = 0;
-			dirtp->rcol = dp->cols-1;
-		}
-		if(dirtp->lcol <= dirtp->rcol){
-			puttext(dirtp->lcol+1,row+1,dirtp->rcol+1,row+1,
-			 bufloc(dp,row,dirtp->lcol));
-			dirtp->lcol = dp->cols-1;
-			dirtp->rcol = 0;
-		}
-	}
-	if(dp->flags.dirty_screen || (dp->flags.dirty_cursor)){
+	if(dp->flags.scrollbk){
+		/* Turn off cursor entirely */
+		_setcursortype(_NOCURSOR);
+	} else 	if(dp->flags.dirty_screen || dp->flags.dirty_cursor){
 		/* Update cursor */
-		if(dp->row+offset <= dp->slast){
-			gotoxy(dp->col+1,dp->row+1+offset);
-			_setcursortype(_NORMALCURSOR);
-		} else {
-			/* Turn off cursor entirely */
-			_setcursortype(_NOCURSOR);
-		}
+		gotoxy(dp->col+1,dp->row+1);
+		_setcursortype(_NORMALCURSOR);
 	}
 	dp->flags.dirty_cursor = 0;
 	dp->flags.dirty_screen = 0;
 }
 void
-dscrollmode(dp,flag)
-struct display *dp;
-int flag;
-{
+dscrollmode(
+struct display *dp,
+int flag
+){
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
 	if(flag != dp->flags.scrollbk){
 		dp->flags.scrollbk = flag;
-		if(dp->sfoffs != 0)
-			dp->flags.dirty_screen = 1;
+		dp->flags.dirty_screen = 1;
 		alert(Display,1);
 	}
 }
 
-
 void
-dhome(dp)
-struct display *dp;
+dhome(struct display *dp)
 {
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	if(dp->sfoffs != dp->sfsize){
-		dp->sfoffs = dp->sfsize;
+	sadjust(dp,(dp->size - dp->rows));
+}
+void
+dend(struct display *dp)
+{
+	if(dp == NULL || dp->cookie != D_COOKIE)
+		return;
+
+	if(dp->realtop != dp->virttop){
+		dp->realtop = dp->virttop;
 		dp->flags.dirty_screen = 1;
 		alert(Display,1);
 	}
 }
 void
-dend(dp)
-struct display *dp;
+dpgup(struct display *dp)
 {
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	if(dp->sfoffs != 0){
-		dp->sfoffs = 0;
-		dp->flags.dirty_screen = 1;
-		alert(Display,1);
-	}
+	sadjust(dp,dp->rows);
 }
 void
-dpgup(dp)
-struct display *dp;
+dpgdown(struct display *dp)
 {
-	long newoffs;
-
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	newoffs = dp->sfoffs + dp->slast + 1;
-	newoffs = min(newoffs,dp->sfsize);
-	if(newoffs != dp->sfoffs){
-		dp->sfoffs = newoffs;
-		dp->flags.dirty_screen = 1;
-		alert(Display,1);
-	}
+	sadjust(dp,-dp->rows);
 }
 void
-dpgdown(dp)
-struct display *dp;
+dcursup(struct display *dp)
 {
-	long newoffs;
-
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	newoffs = dp->sfoffs - (dp->slast + 1);
-	newoffs = max(0,newoffs);
-	if(newoffs != dp->sfoffs){
-		dp->sfoffs = newoffs;
-		dp->flags.dirty_screen = 1; 
-		alert(Display,1);
-	}
+	sadjust(dp,+1);
 }
 void
-dcursup(dp)
-struct display *dp;
+dcursdown(struct display *dp)
 {
 	if(dp == NULL || dp->cookie != D_COOKIE)
 		return;
 
-	if(dp->sfoffs < dp->sfsize){
-		dp->sfoffs++;
-		dp->flags.dirty_screen = 1; 
-		alert(Display,1);
-	}
-}
-void
-dcursdown(dp)
-struct display *dp;
-{
-	if(dp == NULL || dp->cookie != D_COOKIE)
-		return;
-
-	if(dp->sfoffs != 0){
-		dp->sfoffs--;
-		dp->flags.dirty_screen = 1; 
-		alert(Display,1);
-	}
+	sadjust(dp,-1);
 }
 
 /* Process incoming character while in ESCAPE state */
 static void
-desc(dp,c)
-struct display *dp;
-uint8 c;
+desc(struct display *dp,uint8 c)
 {
 	int i;
 
@@ -404,9 +329,7 @@ uint8 c;
 
 /* Process characters after a ESC[ sequence */
 static void
-darg(dp,c)
-struct display *dp;
-uint8 c;
+darg(struct display *dp,uint8 c)
 {
 	int i;
 
@@ -451,8 +374,8 @@ uint8 c;
 		if(dp->arg[0] == 0)
 			dp->arg[0] = 1;	/* Default is one line */
 		dp->row += dp->arg[0];
-		if(dp->row > dp->slast)
-			dp->row = dp->slast;
+		if(dp->row >= dp->rows)
+			dp->row = dp->rows - 1;
 		dp->flags.dirty_cursor = 1; 
 		break;
 	case 'C':	/* Cursor right */
@@ -475,8 +398,8 @@ uint8 c;
 	case 'f':
 	case 'H':	/* Cursor motion - limit to scrolled region */
 		i = (dp->arg[0] == 0) ? 0 : dp->arg[0] - 1;
-		if(i > dp->slast)
-			i = dp->slast;
+		if(i >= dp->rows)
+			i = dp->rows-1;
 		dp->row = i;
 
 		i = (dp->arg[1] == 0) ? 0 : dp->arg[1] - 1;
@@ -551,21 +474,21 @@ uint8 c;
 }
 /* Clear from specified location to end of screen, leaving cursor as is */
 static void
-dclreod(dp,row,col)
-struct display *dp;
-int row,col;
-{
+dclreod(
+struct display *dp,
+int row,
+int col
+){
 	dclreol(dp,row,col);	/* Clear current line */
-	for(row = row + 1;row <= dp->slast;row++)
+	for(row = row + 1;row < dp->rows;row++)
 		dclreol(dp,row,0);	/* Clear all lines below */
 }
 /* Insert space at cursor, moving all chars on right to right one position */
 static void
-dinsert(dp)
-struct display *dp;
+dinsert(struct display *dp)
 {
 	int i = 2*(dp->cols - dp->col - 1);
-	uint8 *cp = bufloc(dp,dp->row,dp->col);
+	uint8 *cp = vbufloc(dp,dp->row,dp->col);
 	struct dirty *dirtp = &dp->dirty[dp->row];
 
 	if(i != 0)
@@ -579,10 +502,9 @@ struct display *dp;
 }
 /* Delete character at cursor, moving chars to right left one position */
 static void
-ddelchar(dp)
-struct display *dp;
+ddelchar(struct display *dp)
 {
-	uint8 *cp = bufloc(dp,dp->row,dp->col);
+	uint8 *cp = vbufloc(dp,dp->row,dp->col);
 	int i = 2*(dp->cols-dp->col-1);
 	struct dirty *dirtp = &dp->dirty[dp->row];
 
@@ -599,37 +521,35 @@ struct display *dp;
 }
 /* Delete line containing cursor, moving lines below up one line */
 static void
-ddelline(dp)
-struct display *dp;
+ddelline(struct display *dp)
 {
 	uint8 *cp1,*cp2;
 	int row;
 	struct dirty *dirtp;
 
-	for(row=dp->row,dirtp = &dp->dirty[row];row < dp->slast;row++,dirtp++){
-		cp1 = bufloc(dp,row,0);
-		cp2 = bufloc(dp,row+1,0);
+	for(row=dp->row,dirtp = &dp->dirty[row];row < dp->rows-1;row++,dirtp++){
+		cp1 = vbufloc(dp,row,0);
+		cp2 = vbufloc(dp,row+1,0);
 		memcpy(cp1,cp2,dp->cols*2);
 		/* Dirty entire line */
 		dirtp->lcol = 0;
 		dirtp->rcol = dp->cols-1;
 	}
 	/* Clear bottom line */
-	dclreol(dp,dp->slast,0);
+	dclreol(dp,dp->rows-1,0);
 }		
 /* Insert blank line where cursor is. Push existing lines down one */
 static void
-dinsline(dp)
-struct display *dp;
+dinsline(struct display *dp)
 {
 	uint8 *cp1,*cp2;
 	int row;
 	struct dirty *dirtp;
 
 	/* Copy lines down */
-	for(row = dp->slast,dirtp = &dp->dirty[row];row > dp->row;row--){
-		cp1 = bufloc(dp,row-1,0);
-		cp2 = bufloc(dp,row,0);
+	for(row = dp->rows-1,dirtp = &dp->dirty[row];row > dp->row;row--){
+		cp1 = vbufloc(dp,row-1,0);
+		cp2 = vbufloc(dp,row,0);
 		memcpy(cp2,cp1,2*dp->cols);
 		/* Dirty entire line */
 		dirtp->lcol = 0;
@@ -641,10 +561,10 @@ struct display *dp;
 
 /* Process an argument to an attribute set command */
 static void
-dattrib(dp,val)
-struct display *dp;
-int val;
-{
+dattrib(
+struct display *dp,
+int val
+){
 	switch(val){
 	case 0:	/* Normal white on black */
 		dp->attrib = 0x7;
@@ -671,10 +591,10 @@ int val;
  }
 /* Display character */
 static void
-dchar(dp,c)
-struct display *dp;
-uint8 c;
-{
+dchar(
+struct display *dp,
+uint8 c
+){
 	uint8 *cp;
 	int row,rowchange;
 	struct dirty *dirtp;
@@ -715,7 +635,7 @@ uint8 c;
 		break;
 	default:	/* Display character on screen */
 		/* Compute location in screen buffer memory */
-		cp = bufloc(dp,dp->row,dp->col);
+		cp = vbufloc(dp,dp->row,dp->col);
 		/* Normal display */
 		if(c != *cp || cp[1] != dp->attrib){
 			dirtp = &dp->dirty[dp->row];
@@ -739,32 +659,19 @@ uint8 c;
 		}
 	}
 	/* Scroll screen if necessary */
-	if(rowchange && dp->row > dp->slast){
+	if(rowchange && dp->row >= dp->rows){
 		dp->row--;
 		/* Scroll screen up */
-		dp->scroll = (dp->scroll + 1) % (dp->slast + 1);
+		dp->virttop = (dp->virttop + 1) % dp->size;
+		if(dp->virttop > dp->maxtop)
+			dp->maxtop = dp->virttop;
+		if(!dp->flags.scrollbk)
+			dp->realtop = (dp->realtop + 1) % dp->size;
 		if(!dp->flags.no_scroll){
-			for(row=0,dirtp=&dp->dirty[row];row <=dp->slast;row++,dirtp++){
+			for(row=0,dirtp=dp->dirty;row <dp->rows;row++,dirtp++){
 				dirtp->lcol = 0;
 				dirtp->rcol = dp->cols-1;
 			}
-		}
-		if(dp->sfile != NULL){
-			uint8 *cp;
-
-			/* When scrolled back, leave screen stationary */
-			if(dp->flags.scrollbk && dp->sfoffs != dp->sflimit)
-				dp->sfoffs++;
-
-			/* Copy scrolled line to scrollback file */
-			cp = bufloc(dp,dp->row,0);
-			fseek(dp->sfile,dp->sfseek,SEEK_SET);
-			fwrite(cp,2,dp->cols,dp->sfile);
-			dp->sfseek += 2*dp->cols;
-			if(dp->sfseek >= 2*dp->cols*dp->sflimit)
-				dp->sfseek = 0;
-			if(dp->sfsize < dp->sflimit)
-				dp->sfsize++;
 		}
 		dclreol(dp,dp->row,0);
 	}
@@ -772,11 +679,12 @@ uint8 c;
 
 /* Clear from specified location to end of line. Cursor is not moved */
 static void
-dclreol(dp,row,col)
-struct display *dp;
-int row,col;
-{
-	uint8 *cp = bufloc(dp,row,col);
+dclreol(
+struct display *dp,
+int row,
+int col
+){
+	uint8 *cp = vbufloc(dp,row,col);
 	struct dirty *dirtp = &dp->dirty[row];
 	int i;
 
@@ -791,12 +699,10 @@ int row,col;
 }
 /* Move cursor to top left corner, clear screen */
 static void
-dclrscr(dp)
-struct display *dp;
+dclrscr(struct display *dp)
 {
 	dclreod(dp,0,0);
 	dp->row = dp->col = 0;
-	dp->scroll = 0;
 	dp->flags.dirty_cursor = 1;
 }
 /* Return pointer into screen buffer for specified cursor location.
@@ -804,25 +710,26 @@ struct display *dp;
  * scrolling
  */
 static uint8 *
-bufloc(dp,row,col)
-struct display *dp;
-int row,col;
-{
-#ifndef	notdef
-	if(row < 0 || row >= dp->rows || col < 0 || col >= dp->cols){
-		stktrace();
-		cprintf("panic: bufloc(%p,%d,%d)\n",dp,row,col);
-		exit(1);
-	}
-#endif
-	if(row <= dp->slast)
-		row = (row + dp->scroll) % (dp->slast + 1);
+rbufloc(
+struct display *dp,
+int row,
+int col
+){
+	row = (row + dp->realtop) % dp->size;
+	return dp->buf + 2*(col + dp->cols*row);
+}
+static uint8 *
+vbufloc(
+struct display *dp,
+int row,
+int col
+){
+	row = (row + dp->virttop) % dp->size;
 	return dp->buf + 2*(col + dp->cols*row);
 }
 /* Immediately display short debug string on lower right corner of display */
 void
-debug(s)
-char *s;
+debug(char *s)
 {
 	int i;
 	static uint8 msg[2*DSIZ];
@@ -831,7 +738,7 @@ char *s;
 		/* One time initialization to blanks with white-on-black */
 		for(i=0;i<DSIZ;i++){
 			msg[2*i] = ' ';
-			msg[2*i+1] = 0x7;
+ 			msg[2*i+1] = 0x7;
 		}
 	}
 	if(s == NULL)
@@ -842,5 +749,30 @@ char *s;
 	for(;i<DSIZ;i++)
 		msg[2*i] = ' ';
 
-	puttext(DCOL,25,80,25,msg);
+	puttext(DCOL,ROWS,COLS,ROWS,msg);
+}
+static int
+sadjust(struct display *dp,int lines)
+{
+	int curscroll,newscroll;
+
+	curscroll = (dp->size + dp->virttop - dp->realtop) % dp->size;
+	newscroll = curscroll + lines;
+	if(newscroll < 0)
+		newscroll = 0;
+	else if(newscroll > dp->maxtop)
+		newscroll = dp->maxtop;
+	else if(newscroll > dp->size - dp->rows)
+		newscroll = dp->size - dp->rows;
+
+	if(newscroll != curscroll){
+		dp->realtop -= newscroll - curscroll;
+		while(dp->realtop < 0)
+			dp->realtop += dp->size;
+		while(dp->realtop >= dp->size)
+			dp->realtop -= dp->size;
+		dp->flags.dirty_screen = 1;
+		alert(Display,1);
+	}
+	return newscroll;
 }

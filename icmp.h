@@ -75,13 +75,13 @@ struct icmp {
 	uint8 type;
 	uint8 code;
  	union icmp_args {
-		uint16 mtu;
+		uint mtu;
 		int32 unused;
 		uint8 pointer;
 		int32 address;
 		struct {
-			uint16 id;
-			uint16 seq;
+			uint id;
+			uint seq;
 		} echo;
 	} args;
 };

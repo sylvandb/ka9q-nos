@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <setjmp.h>
+#include <errno.h>
 #ifdef UNIX
 #include <sys/types.h>
 #endif

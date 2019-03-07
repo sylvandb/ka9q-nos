@@ -3,19 +3,19 @@
 
 /* a string entry */
 struct zentry {
-	uint16 code;	/* codeword of the prefix string */
+	uint code;	/* codeword of the prefix string */
 	char data;	/* character to add to the prefix string */
 };
 struct zfast {		/* fast version of string entry */
-	uint16 owncode;	/* own codeword */
-	uint16 code;	/* codeword of prefix string */
+	uint owncode;	/* own codeword */
+	uint code;	/* codeword of prefix string */
 	char data;	/* character to add to prefix string */
 };
 #define ZCC		256	/* clear code table codeword */
 #define ZFLUSH		257	/* codeword that signals a break in coding */
 
 struct lzw {
-	uint16 codebits;		/* significant bits in each codeword */
+	uint codebits;		/* significant bits in each codeword */
 	int maxbits;		/* maximum number of bits per codeword */
 #define LZWBITS		9	/* initial number of bits in each codeword */
 	int32 prefix;		/* last processed codeword */

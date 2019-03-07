@@ -109,7 +109,7 @@ ax_output(
 struct iface *iface,	/* Interface to use; overrides routing table */
 uint8 *dest,		/* Destination AX.25 address (7 bytes, shifted) */
 uint8 *source,		/* Source AX.25 address (7 bytes, shifted) */
-uint16 pid,		/* Protocol ID */
+uint pid,		/* Protocol ID */
 struct mbuf **bpp	/* Data field (follows PID) */
 ){
 	/* Prepend pid to data */
@@ -346,7 +346,7 @@ struct ax_route *
 ax_lookup(
 uint8 *target
 ){
-	register struct ax_route *axr;
+	struct ax_route *axr;
 	struct ax_route *axlast = NULL;
 
 	for(axr = Ax_routes; axr != NULL; axlast=axr,axr = axr->next){
@@ -373,7 +373,7 @@ int type,
 uint8 digis[][AXALEN],
 int ndigis
 ){
-	register struct ax_route *axr;
+	struct ax_route *axr;
 
 	if(ndigis < 0 || ndigis > MAXDIGIS)
 		return NULL;
@@ -396,7 +396,7 @@ int
 ax_drop(
 uint8 *target
 ){
-	register struct ax_route *axr;
+	struct ax_route *axr;
 	struct ax_route *axlast = NULL;
 
 	for(axr = Ax_routes;axr != NULL;axlast=axr,axr=axr->next)

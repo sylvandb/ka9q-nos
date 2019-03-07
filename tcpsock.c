@@ -1,3 +1,4 @@
+#include <errno.h>
 #include "global.h"
 #include "tcp.h"
 #include "socket.h"
@@ -9,7 +10,7 @@ static void s_ttcall(struct tcb *tcb,int32 cnt);
 static void trdiscard(struct tcb *tcb,int32 cnt);
 static void autobind(struct usock *up);
 
-uint16 Lport = 1024;
+uint Lport = 1024;
 
 int
 so_tcp(struct usock *up,int protocol)
@@ -234,7 +235,7 @@ s_tscall(struct tcb *tcb,int old,int new)
 			up->errcodes[2] = tcb->code;
 			ksignal(up,0); /* Wake up anybody waiting */
 		}
-		del_tcp(tcb);
+		del_tcp(&tcb);
 		break;
 	case TCP_SYN_RECEIVED:
 		/* Handle an incoming connection. If this is a server TCB,
@@ -342,7 +343,7 @@ static void i_upcall(struct tcb *tcb,int oldstate,int newstate);
  * when a connection comes in
  */ 
 int
-start_tcp(uint16 port,char *name,void (*task)(int,void *,void *),int stack)
+start_tcp(uint port,char *name,void (*task)(int,void *,void *),int stack)
 {
 	struct inet *in;
 	struct socket lsocket;
@@ -376,7 +377,7 @@ i_upcall(struct tcb *tcb,int oldstate,int newstate)
 		return;	/* "can't happen" */
 	if(newstate == TCP_CLOSED){
 		/* Called when server is shut down */
-		del_tcp(tcb);
+		del_tcp(&tcb);
 		return;
 	}
 	for(in = Inet_list;in != NULLINET;in = in->next)
@@ -411,7 +412,7 @@ i_upcall(struct tcb *tcb,int oldstate,int newstate)
 }
 /* Close down a TCP server created earlier by inet_start */
 int
-stop_tcp(uint16 port)
+stop_tcp(uint port)
 {
 	struct inet *in,*inprev;
 

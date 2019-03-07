@@ -3,7 +3,7 @@
  *  keyboard processing
  *  generic user commands
  *
- * Copyright 1986-1995 Phil Karn, KA9Q
+ * Copyright 1986-1996 Phil Karn, KA9Q
  */
 #include <stdio.h>
 #include <time.h>
@@ -39,7 +39,6 @@
 #include "domain.h"
 #include "files.h"
 #include "main.h"
-#include "remote.h"
 #include "trace.h"
 #include "display.h"
 
@@ -65,11 +64,10 @@ static int Verbose;
 static int keychar(int c);
 static void pass(char *,int len);
 static void passchar(int c);
+static void helpsub(struct cmds *cmds);
 
 int
-main(argc,argv)
-int argc;
-char *argv[];
+main(int argc,char *argv[])
 {
 	FILE *fp;
 	struct daemon *tp;
@@ -77,7 +75,6 @@ char *argv[];
 	char cmdbuf[256];
 	long hinit = 102400;
 	unsigned chunk;
-	void **list;
 
 	StartTime = time(&StartTime);
 
@@ -105,21 +102,8 @@ char *argv[];
 			break;
 		}
 	}
-	/* Get some memory on the heap so interrupt calls to malloc
-	 * won't fail unnecessarily
-	 */
-	list = calloc(sizeof(void *),(hinit / 32768L) + 1);
-	for(c=0;hinit > 0;hinit -= chunk){
-		chunk = min(hinit,32768U);
-		list[c++] = malloc(chunk);
-	}
-	while(c > 0)
-		free(list[--c]);
-	free(list);
-
 	kinit();
-	ipinit();
-	ioinit();
+	ioinit(hinit);
 	sockinit();
 	Cmdpp = mainproc("cmdintrp");
 
@@ -130,7 +114,11 @@ char *argv[];
 #ifdef	CPU386
 	printf("Compiled for 386/486 CPU\n");
 #endif
-	printf("Copyright 1986-1995 by Phil Karn, KA9Q\n");
+	printf("Copyright 1986-1996 by Phil Karn, KA9Q\n");
+	if(Verbose){
+		printf("cs = %lx ds = %lx ss = %lx\n",_go32_my_cs(),_go32_my_ds(),
+		  _go32_my_ss());
+	}
 	usercvt();
 	/* Start background Daemons */
 	for(tp=Daemons;;tp++){
@@ -151,14 +139,13 @@ char *argv[];
 	if(fp != NULL){
 		while(fgets(cmdbuf,sizeof(cmdbuf),fp) != NULL){
 			rip(cmdbuf);
-			if(Cmdline != NULL)
-				free(Cmdline);
 			Cmdline = strdup(cmdbuf);
 			if(Verbose)
 				printf("%s\n",Cmdline);
 			if(cmdparse(Cmds,cmdbuf,NULL) != 0){
 				printf("input line: %s\n",Cmdline);
 			}
+			FREE(Cmdline);
 		}
 		fclose(fp);
 	}
@@ -168,8 +155,7 @@ char *argv[];
 		fflush(stdout);
 		if(fgets(cmdbuf,sizeof(cmdbuf),stdin) != NULL){
 			rip(cmdbuf);
-			if(Cmdline)
-				free(Cmdline);
+			FREE(Cmdline);
 			Cmdline = strdup(cmdbuf);
 			(void)cmdparse(Cmds,cmdbuf,Lastcurr);
 		}
@@ -177,11 +163,11 @@ char *argv[];
 }
 /* Keyboard input process */
 void
-keyboard(i,v1,v2)
-int i;
-void *v1;
-void *v2;
-{
+keyboard(
+int i,
+void *v1,
+void *v2
+){
 	int c;
 	int j;
 
@@ -336,17 +322,14 @@ loop:
 	goto loop;
 }
 static void
-pass(s,len)
-char *s;
-int len;
+pass(char *s,int len)
 {
 	while(len-- != 0)
 		passchar(*s++);
 }
 
 static void
-passchar(c)
-int c;
+passchar(int c)
 {
 	int cnt;
 
@@ -365,11 +348,11 @@ int c;
 }
 /* Standard commands called from main */
 int
-dorepeat(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dorepeat(
+int argc,
+char *argv[],
+void *p
+){
 	int32 interval;
 	int ret;
 	struct session *sp;
@@ -398,12 +381,11 @@ void *p;
 			break;
 	}
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 static int
-keychar(c)
-int c;
+keychar(int c)
 {
 	if(c != CTLC)
 		return 1;	/* Ignore all but ^C */
@@ -415,11 +397,11 @@ int c;
 }
 
 int
-dodelete(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dodelete(
+int argc,
+char *argv[],
+void *p
+){
 	int i;
 
 	for(i=1;i < argc; i++){
@@ -431,11 +413,11 @@ void *p;
 	return 0;
 }
 int
-dorename(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dorename(
+int argc,
+char *argv[],
+void *p
+){
 	if(rename(argv[1],argv[2]) == -1){
 		printf("Can't rename %s",argv[1]);
 		perror("");
@@ -443,11 +425,11 @@ void *p;
 	return 0;
 }
 int
-doexit(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+doexit(
+int argc,
+char *argv[],
+void *p
+){
 	int i;
 	time_t StopTime;
 	struct session *sp;
@@ -479,11 +461,27 @@ void *p;
 	return 0;	/* To satisfy lint */
 }
 int
-dohostname(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+doreboot(
+int argc,
+char *argv[],
+void *p
+){
+	time_t StopTime;
+
+	StopTime = time(&StopTime);
+	logmsg(-1,"NOS reboot at %s",ctime(&StopTime));
+	ppause(1000L);
+	iostop();
+	sysreset();	/* no return */
+	return 0;	/* to satisfy lint */
+}
+
+int
+dohostname(
+int argc,
+char *argv[],
+void *p
+){
 	if(argc < 2)
 		printf("%s\n",Hostname);
 	else {
@@ -495,8 +493,7 @@ void *p;
 				printf("Interface address not resolved\n");
 				return 1;
 			} else {
-				if(Hostname != NULL)
-					free(Hostname);
+				FREE(Hostname);
 				Hostname = name;
 
 				/* remove trailing dot */
@@ -506,19 +503,18 @@ void *p;
 				printf("Hostname set to %s\n", name );
 			}
 		} else {
-			if(Hostname != NULL)
-				free(Hostname);
+			FREE(Hostname);
 			Hostname = strdup(argv[1]);
 		}
 	}
 	return 0;
 }
 int
-dolog(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dolog(
+int argc,
+char *argv[],
+void *p
+){
 	static char *logname;
 
 	if(argc < 2){
@@ -532,8 +528,7 @@ void *p;
 		logmsg(-1,"NOS log closed");
 		fclose(Logfp);
 		Logfp = NULL;
-		free(logname);
-		logname = NULL;
+		FREE(logname);
 	}
 	if(strcmp(argv[1],"stop") != 0){
 		logname = strdup(argv[1]);
@@ -543,12 +538,28 @@ void *p;
 	return 0;
 }
 int
-dohelp(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
+dohelp(
+int argc,
+char *argv[],
+void *p
+){
+	helpsub(Cmds);
+	return 0;
+}
+
+int
+dorhelp(
+int argc,
+char *argv[],
+void *p
+){
+	helpsub(Remcmds);
+	return 0;
+}
+static void
+helpsub(struct cmds *cmds)
 {
-	register struct cmds *cmdp;
+	struct cmds *cmdp;
 	int i;
 	char buf[66];
 
@@ -556,7 +567,7 @@ void *p;
 	memset(buf,' ',sizeof(buf));
 	buf[64] = '\n';
 	buf[65] = '\0';
-	for(i=0,cmdp = Cmds;cmdp->name != NULL;cmdp++,i = (i+1)%4){
+	for(i=0,cmdp = cmds;cmdp->name != NULL;cmdp++,i = (i+1)%4){
 		strncpy(&buf[i*16],cmdp->name,strlen(cmdp->name));
 		if(i == 3){
 			printf(buf);
@@ -567,27 +578,27 @@ void *p;
 	}
 	if(i != 0)
 		printf(buf);
-	return 0;
 }
+
 /* Attach an interface
  * Syntax: attach <hw type> <I/O address> <vector> <mode> <label> <bufsize> [<speed>]
  */
 int
-doattach(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+doattach(
+int argc,
+char *argv[],
+void *p
+){
 	return subcmd(Attab,argc,argv,p);
 }
 /* Manipulate I/O device parameters */
 int
-doparam(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	register struct iface *ifp;
+doparam(
+int argc,
+char *argv[],
+void *p
+){
+	struct iface *ifp;
 	int param;
 	int32 val;
 
@@ -628,11 +639,11 @@ void *p;
 
 #ifndef	MSDOS
 int
-doescape(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+doescape(
+int argc,
+char *argv[],
+void *p
+){
 	if(argc < 2)
 		printf("0x%x\n",Escape);
 	else
@@ -640,109 +651,14 @@ void *p;
 	return 0;
 }
 #endif	MSDOS
-/* Generate system command packet. Synopsis:
- * remote [-p port#] [-k key] [-a hostname] <hostname> reset|exit|kickme
- */
-int
-doremote(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	struct sockaddr_in fsock;
-	int s,c;
-	uint8 *data,x;
-	uint16 port,len;
-	char *key = NULL;
-	int klen;
-	int32 addr = 0;
-	char *cmd,*host;
-
-	port = IPPORT_REMOTE;	/* Set default */
-	optind = 1;		/* reinit getopt() */
-	while((c = getopt(argc,argv,"a:p:k:s:")) != EOF){
-		switch(c){
-		case 'a':
-			addr = resolve(optarg);
-			break;
-		case 'p':
-			port = atoi(optarg);
-			break;
-		case 'k':
-			key = optarg;
-			klen = strlen(key);
-			break;
-		case 's':
-			Rempass = strdup(optarg);
-			return 0;	/* Only set local password */
-		}
-	}
-	if(optind > argc - 2){
-		printf("Insufficient args\n");
-		return -1;
-	}
-	host = argv[optind++];
-	cmd = argv[optind];
-	if((s = socket(AF_INET,SOCK_DGRAM,0)) == -1){
-		perror("socket failed");
-		return 1;
-	}
-	len = 1;
-	/* Did the user include a password or kickme target? */
-	if(addr != 0)
-		len += sizeof(int32);
-
-	if(key != NULL)
-		len += klen;
-
-	if(len == 1)
-		data = &x;
-	else
-		data = mallocw(len);
-
-	fsock.sin_family = AF_INET;
-	fsock.sin_addr.s_addr = resolve(host);
-	fsock.sin_port = port;
-
-	switch(cmd[0]){
-	case 'r':
-		data[0] = SYS_RESET;
-		if(key != NULL)
-			strncpy((char *)&data[1],key,klen);
-		break;
-	case 'e':
-		data[0] = SYS_EXIT;
-		if(key != NULL)
-			strncpy((char *)&data[1],key,klen);
-		break;
-	case 'k':
-		data[0] = KICK_ME;
-		if(addr != 0)
-			put32(&data[1],addr);
-		break;
-	default:
-		printf("Unknown command %s\n",cmd);
-		goto cleanup;
-	}
-	/* Form the command packet and send it */
-	if(sendto(s,data,len,0,(struct sockaddr *)&fsock,sizeof(fsock)) == -1){
-		perror("sendto failed");
-		goto cleanup;
-	}
-cleanup:
-	if(data != &x)
-		free(data);
-	close_s(s);
-	return 0;
-}
 
 /* Execute a command with output piped to more */
 int
-dopage(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dopage(
+int argc,
+char *argv[],
+void *p
+){
 	FILE *fp;
 	FILE *outsav;
 
@@ -757,32 +673,32 @@ void *p;
 
 /* Set kernel process debug flag */
 int
-dodebug(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dodebug(
+int argc,
+char *argv[],
+void *p
+){
 	setbool(&Kdebug,"kernel debug",argc,argv);
 	return 0;
 }
 /* Set temp file wipe-on-close flag */
 int
-dowipe(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+dowipe(
+int argc,
+char *argv[],
+void *p
+){
 	setbool(&_clrtmp,"tmp file wiping",argc,argv);
 	return 0;
 }
 
 /* No-op command */
 int
-donothing(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
+donothing(
+int argc,
+char *argv[],
+void *p
+){
 	return 0;
 }
 
@@ -794,7 +710,7 @@ logmsg(int s,char *fmt, ...)
 {
 	va_list ap;
 	char *cp;
-	long t;
+	time_t t;
 	int i;
 	struct sockaddr fsocket;
 #ifdef	MSDOS

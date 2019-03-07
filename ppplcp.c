@@ -36,7 +36,7 @@ static struct lcp_value_s lcp_default = {
 };
 
 /* for test purposes, accept anything we understand in the NAK */
-static uint16 lcp_negotiate = LCP_N_MRU | LCP_N_ACCM | LCP_N_AUTHENT
+static uint lcp_negotiate = LCP_N_MRU | LCP_N_ACCM | LCP_N_AUTHENT
 		| LCP_N_PFC | LCP_N_ACFC | LCP_N_MAGIC;
 
 static byte_t option_length[] = {
@@ -71,7 +71,7 @@ static void lcp_option(struct mbuf **bpp,
 			struct mbuf **copy_bpp );
 static void lcp_makeoptions(struct mbuf **bpp,
 			struct lcp_value_s *value_p,
-			uint16 negotiating);
+			uint negotiating);
 static struct mbuf *lcp_makereq(struct fsm_s *fsm_p);
 
 static int lcp_check(struct mbuf **bpp,
@@ -163,8 +163,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp = p;
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct iface *ifp = p;
+	struct ppp_s *ppp_p = ifp->edv;
 
 	return subcmd(Lcpcmds, argc, argv, &(ppp_p->fsm[Lcp]));
 }
@@ -305,7 +305,7 @@ void *p;
 		return bit16cmd(&(side_p->will_negotiate),LCP_N_MAGIC,
 			"Allow Magic Number", --argc, &argv[1] );
 	} else {
-		register int32 x = strtoul(argv[1], NULL, 0);
+		int32 x = strtoul(argv[1], NULL, 0);
 
 		if ( !x ) {
 			int test;
@@ -343,7 +343,7 @@ void *p;
 		return bit16cmd(&(side_p->will_negotiate),LCP_N_MRU,
 			"Allow MRU", --argc, &argv[1] );
 	} else {
-		register int x = (int)strtol( argv[1], NULL, 0 );
+		int x = (int)strtol( argv[1], NULL, 0 );
 
 		if (x < LCP_MRU_LO || x > LCP_MRU_HI) {
 			printf("MRU %s (%d) out of range %d thru %d\n",
@@ -403,8 +403,8 @@ byte_t o_length;
 struct mbuf **copy_bpp;
 {
 	struct mbuf *bp;
-	register uint8 *cp;
-	register int toss = o_length - OPTION_HDR_LEN;
+	uint8 *cp;
+	int toss = o_length - OPTION_HDR_LEN;
 
 	if ((bp = alloc_mbuf(o_length)) == NULL) {
 		return;
@@ -490,9 +490,9 @@ static void
 lcp_makeoptions(bpp, value_p, negotiating)
 struct mbuf **bpp;
 struct lcp_value_s *value_p;
-uint16 negotiating;
+uint negotiating;
 {
-	register int o_type;
+	int o_type;
 
 	PPP_DEBUG_ROUTINES("lcp_makeoptions()");
 
@@ -668,7 +668,7 @@ struct mbuf **data;
 	int32 signed_length = config->len;
 	struct mbuf *reply_bp = NULL;	/* reply packet */
 	int reply_result = CONFIG_ACK;		/* reply to request */
-	uint16 desired;				/* desired to negotiate */
+	uint desired;				/* desired to negotiate */
 	struct option_hdr option;		/* option header storage */
 	int option_result;			/* option reply */
 
@@ -782,8 +782,8 @@ struct mbuf **data
 		PPP_DEBUG_CHECKS("LCP ACK: buffer length mismatch");
 		error = TRUE;
 	} else {
-		register int req_char;
-		register int ack_char;
+		int req_char;
+		int ack_char;
 
 		/* Each byte should match */
 		while ((req_char = pullchar(&req_bp)) != -1) {
@@ -896,7 +896,7 @@ struct mbuf **data
 
 	/* Process in order, checking for errors */
 	while (signed_length > 0  &&  ntohopt(&option, data) != -1) {
-		register int k;
+		int k;
 
 		if ((signed_length -= option.len) < 0) {
 			PPP_DEBUG_CHECKS("LCP REJ: bad header length");

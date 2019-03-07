@@ -26,38 +26,30 @@ static int asyrxint(struct asy *asyp);
 static void asytxint(struct asy *asyp);
 static void asymsint(struct asy *asyp);
 static void pasy(struct asy *asyp);
-static INTERRUPT (far *(asycom)(struct asy *))(void);
+static void asycom(struct asy *);
 
 struct asy Asy[ASY_MAX];
 
 struct fport Fport[FPORT_MAX];
 
-static INTERRUPT (*Fphand[FPORT_MAX])() = {
-fp0vec,
-};
-
-/* ASY interrupt handlers */
-static INTERRUPT (*Handle[ASY_MAX])() = {
-asy0vec,asy1vec,asy2vec,asy3vec,asy4vec,asy5vec
-};
+void asyint(int dev);
 
 /* Initialize asynch port "dev" */
 int
-asy_init(dev,ifp,base,irq,bufsize,trigchar,speed,cts,rlsd,chain)
-int dev;
-struct iface *ifp;
-int base;
-int irq;
-uint16 bufsize;
-int trigchar;
-long speed;
-int cts;		/* Use CTS flow control */
-int rlsd;		/* Use Received Line Signal Detect (aka CD) */
-int chain;		/* Chain interrupts */
-{
-	register struct fifo *fp;
-	register struct asy *ap;
-	int i_state;
+asy_init(
+int dev,
+struct iface *ifp,
+int base,
+int irq,
+uint bufsize,
+int trigchar,
+long speed,
+int cts,		/* Use CTS flow control */
+int rlsd,		/* Use Received Line Signal Detect (aka CD) */
+int chain		/* Chain interrupts */
+){
+	struct fifo *fp;
+	struct asy *ap;
 
 	ap = &Asy[dev];
 	ap->iface = ifp;
@@ -79,12 +71,10 @@ int chain;		/* Chain interrupts */
 	/* Purge the receive data buffer */
 	(void)inportb(base+RBR);
 
-	i_state = dirps();
-
-	/* Save original interrupt vector, mask state, control bits */
+	/* Save original mask state, force off interrupts for now */
 	if(ap->vec != -1){
-		ap->save.vec = getirq(ap->vec);
 		ap->save.mask = getmask(ap->vec);
+		maskoff(ap->vec);
 	}
 	ap->save.lcr = inportb(base+LCR);
 	ap->save.ier = inportb(base+IER);
@@ -104,7 +94,7 @@ int chain;		/* Chain interrupts */
 
 	/* Set interrupt vector to SIO handler */
 	if(ap->vec != -1)
-		setirq(ap->vec,Handle[dev]);
+		setvect(ap->vec,chain,asyint,dev);
 
 	/* Set line control register: 8 bits, no parity */
 	outportb(base+LCR,LCR_8BITS);
@@ -143,7 +133,6 @@ int chain;		/* Chain interrupts */
 	/* Enable interrupt */
 	if(ap->vec != -1)
 		maskon(ap->vec);
-	restore(i_state);
 
 	asy_speed(dev,speed);
 
@@ -152,13 +141,11 @@ int chain;		/* Chain interrupts */
 
 
 int
-asy_stop(ifp)
-struct iface *ifp;
+asy_stop(struct iface *ifp)
 {
-	register unsigned base;
-	register struct asy *ap;
+	unsigned base;
+	struct asy *ap;
 	struct asydialer *dialer;
-	int i_state;
 
 	ap = &Asy[ifp->dev];
 
@@ -187,15 +174,10 @@ struct iface *ifp;
 			outportb(base+FCR,0);
 	}
 	/* Restore original interrupt vector and 8259 mask state */
-	i_state = dirps();
 	if(ap->vec != -1){
-		setirq(ap->vec,ap->save.vec);
-		if(ap->save.mask)
-			maskon(ap->vec);
-		else
-			maskoff(ap->vec);
+		freevect(ap->vec);
+		maskoff(ap->vec);
 	}
-
 	/* Restore speed regs */
 	setbit(base+LCR,LCR_DLAB);
 	outportb(base+DLL,ap->save.divl);	/* Low byte */
@@ -207,7 +189,11 @@ struct iface *ifp;
 	outportb(base+IER,ap->save.ier);
 	outportb(base+MCR,ap->save.mcr);
 
-	restore(i_state);
+	if(ap->save.mask)
+		maskon(ap->vec);
+	else
+		maskoff(ap->vec);
+
 	free(ap->fifo.buf);
 	return 0;
 }
@@ -215,16 +201,16 @@ struct iface *ifp;
 
 /* Set asynch line speed */
 int
-asy_speed(dev,bps)
-int dev;
-long bps;
-{
-	register unsigned base;
-	register long divisor;
+asy_speed(
+int dev,
+int32 bps
+){
+	unsigned base;
+	long divisor;
 	struct asy *asyp;
 	int i_state;
 
-	if(bps <= 0 || dev >= ASY_MAX)
+	if(dev >= ASY_MAX)
 		return -1;
 	asyp = &Asy[dev];
 	if(asyp->iface == NULL)
@@ -237,7 +223,7 @@ long bps;
 	base = asyp->addr;
 	divisor = BAUDCLK / bps;
 
-	i_state = dirps();
+	i_state = disable();
 
 	/* Purge the receive data buffer */
 	(void)inportb(base+RBR);
@@ -261,14 +247,14 @@ long bps;
 
 /* Asynchronous line I/O control */
 int32
-asy_ioctl(ifp,cmd,set,val)
-struct iface *ifp;
-int cmd;
-int set;
-int32 val;
-{
+asy_ioctl(
+struct iface *ifp,
+int cmd,
+int set,
+int32 val
+){
 	struct asy *ap = &Asy[ifp->dev];
-	uint16 base = ap->addr;
+	uint base = ap->addr;
 
 	switch(cmd){
 	case PARAM_SPEED:
@@ -300,8 +286,7 @@ int32 val;
  * packet-mode operations. Returns device number for asy_write and get_asy
  */
 int
-asy_open(name)
-char *name;
+asy_open(char *name)
 {
 	struct iface *ifp;
 	int dev;
@@ -324,8 +309,7 @@ char *name;
 	return dev;
 }
 int
-asy_close(dev)
-int dev;
+asy_close(int dev)
 {
 	struct iface *ifp;
 
@@ -345,12 +329,12 @@ int dev;
 
 /* Send a buffer on the serial transmitter and wait for completion */
 int
-asy_write(dev,buf,cnt)
-int dev;
-void *buf;
-unsigned short cnt;
-{
-	register struct dma *dp;
+asy_write(
+int dev,
+const void *buf,
+unsigned short cnt
+){
+	struct dma *dp;
 	unsigned base;
 	struct asy *asyp;
 	int tmp;
@@ -369,7 +353,7 @@ unsigned short cnt;
 	if(dp->busy)
 		return -1;	/* Already busy */
 
-	dp->data = buf;
+	dp->data = (uint8 *)buf;
 	dp->cnt = cnt;
 	dp->busy = 1;
 
@@ -388,7 +372,7 @@ unsigned short cnt;
 	}
 	/* Wait for completion */
 	for(;;){
-		i_state = dirps();
+		i_state = disable();
 		tmp = dp->busy;
 		restore(i_state);
 		if(tmp == 0)
@@ -404,11 +388,11 @@ unsigned short cnt;
  * returns number of bytes read, up to 'cnt' max
  */
 int
-asy_read(dev,buf,cnt)
-int dev;
-void *buf;
-unsigned short cnt;
-{
+asy_read(
+int dev,
+void *buf,
+unsigned short cnt
+){
 	struct fifo *fp;
 	int i_state,tmp;
 	uint8 c,*obp;
@@ -424,7 +408,7 @@ unsigned short cnt;
 	obp = (uint8 *)buf;
 	for(;;){
 		/* Atomic read of and subtract from fp->cnt */
-		i_state = dirps();
+		i_state = disable();
 		tmp = fp->cnt;
 		if(tmp != 0){
 			if(cnt > tmp)
@@ -451,8 +435,7 @@ unsigned short cnt;
  * Returns character or -1 if aborting
  */
 int
-get_asy(dev)
-int dev;
+get_asy(int dev)
 {
 	uint8 c;
 	int tmp;
@@ -464,14 +447,13 @@ int dev;
 }
 
 /* Interrupt handler for 8250 asynch chip (called from asyvec.asm) */
-INTERRUPT (far *(asyint)(dev))()
-int dev;
+void
+asyint(int dev)
 {
-	return asycom(&Asy[dev]);
+	asycom(&Asy[dev]);
 }
 /* Interrupt handler for AST 4-port board (called from fourport.asm) */
-INTERRUPT (far *(fpint)(dev))()
-int dev;
+void fpint(int dev)
 {
 	int iv;
 	struct fport *fport;
@@ -485,11 +467,10 @@ int dev;
 				asycom(fport->asy[i]);
 		}
 	}
-	return NULL;
 }
 /* Common interrupt handler code for 8250/16550 port */
-static INTERRUPT (far *(asycom)(asyp))(void)
-struct asy *asyp;
+static void
+asycom(struct asy *asyp)
 {
 	unsigned base;
 	char iir;
@@ -512,16 +493,14 @@ struct asy *asyp;
 		if(iir & IIR_FIFO_TIMEOUT)
 			asyp->fifotimeouts++;
 	}
-	return asyp->chain ? asyp->save.vec : NULL;
 }
 
 
 /* Process 8250 receiver interrupts */
 static int
-asyrxint(asyp)
-struct asy *asyp;
+asyrxint(struct asy *asyp)
 {
-	register struct fifo *fp;
+	struct fifo *fp;
 	unsigned base;
 	uint8 c,lsr;
 	int cnt = 0;
@@ -567,12 +546,11 @@ struct asy *asyp;
 
 /* Handle 8250 transmitter interrupts */
 static void
-asytxint(asyp)
-struct asy *asyp;
+asytxint(struct asy *asyp)
 {
-	register struct dma *dp;
-	register unsigned base;
-	register int count;
+	struct dma *dp;
+	unsigned base;
+	int count;
 
 	base = asyp->addr;
 	dp = &asyp->dma;
@@ -626,8 +604,7 @@ struct asy *asyp;
 
 /* Handle 8250 modem status change interrupt */
 static void
-asymsint(asyp)
-struct asy *asyp;
+asymsint(struct asy *asyp)
 {
 	unsigned base = asyp->addr;
 
@@ -684,11 +661,11 @@ int new_rlsd;
  * packets are being received.
  */
 void
-asytimer()
+asytimer(void)
 {
-	register struct asy *asyp;
-	register struct fifo *fp;
-	register int i;
+	struct asy *asyp;
+	struct fifo *fp;
+	int i;
 	int i_state;
 
 	for(i=0;i<ASY_MAX;i++){
@@ -700,7 +677,7 @@ asytimer()
 		 && (inportb(asyp->addr+LSR) & LSR_THRE)
 		 && (!asyp->cts || (asyp->msr & MSR_CTS))){
 			asyp->txto++;
-			i_state = dirps();
+			i_state = disable();
 			asytxint(asyp);
 			restore(i_state);
 		}
@@ -712,7 +689,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct asy *asyp;
+	struct asy *asyp;
 	struct iface *ifp;
 	int i;
 
@@ -742,8 +719,7 @@ void *p;
 }
 
 static void
-pasy(asyp)
-struct asy *asyp;
+pasy(struct asy *asyp)
 {
 	int mcr;
 
@@ -796,7 +772,7 @@ struct mbuf **bpp;
 		/* Send the buffer */
 		asy_write(dev,(*bpp)->data,(*bpp)->cnt);
 		/* Now do next buffer on chain */
-		*bpp = free_mbuf(bpp);
+		free_mbuf(bpp);
 	}
 	return 0;
 }
@@ -826,13 +802,13 @@ void *p;
 	fp->base = htoi(argv[1]);
 	fp->irq = atoi(argv[2]);
 	fp->iv = fp->base + 0x1f;
-	setirq(fp->irq,Fphand[i]);
+	setvect(fp->irq,0,fpint,i);
 	maskon(fp->irq);
 	outportb(fp->iv,0x80);	/* Enable global interrupts */
 	return 0;
 }
 void
-fp_stop()
+fp_stop(void)
 {
 	int i;
 	struct fport *fp;
@@ -845,4 +821,3 @@ fp_stop()
 		maskoff(fp->irq);
 	}
 }
-

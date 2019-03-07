@@ -2,6 +2,14 @@
 #ifndef	_N8250_H
 #define	_N8250_H
 
+#ifndef __dj_include_go32_h_
+#include <go32.h>
+#endif
+
+#ifndef __dj_include_dpmi_h_
+#include <dpmi.h>
+#endif
+
 #ifndef	_MBUF_H
 #include "mbuf.h"
 #endif
@@ -45,8 +53,7 @@ struct asy {
 	long speed;		/* Line speed in bits per second */
 
 	struct {		/* Previous configuration saved at startup */
-		INTERRUPT (*vec)(void);
-				/* Original interrupt vector [cs:pc] */
+		_go32_dpmi_seginfo vector;
 		uint8 mask;	/* 8259 mask */
 		uint8 divh,divl;	/* baud rate divisor */
 		uint8 lcr;	/* line control reg */
@@ -55,6 +62,7 @@ struct asy {
 		uint8 msr;	/* modem status bits */
 		uint8 iir;	/* Interrupt ind register (for fifo bits) */
 	} save;
+	_go32_dpmi_seginfo vector;
 
 	uint8 is_16550a;		/* 16550A detected */
 	uint8 msr;		/* Copy of current modem status register */
@@ -176,13 +184,5 @@ extern struct fport Fport[];
 #define FIFO_SETUP	(FIFO_ENABLE|FIFO_CLR_RX|FIFO_CLR_TX|FIFO_TRIGGER_LEVEL)
 
 #define OUTPUT_FIFO_SIZE	16
-
-/* In asyvec.asm: */
-INTERRUPT asy0vec(void);
-INTERRUPT asy1vec(void);
-INTERRUPT asy2vec(void);
-INTERRUPT asy3vec(void);
-INTERRUPT asy4vec(void);
-INTERRUPT asy5vec(void);
 
 #endif	/* _N8250_H */

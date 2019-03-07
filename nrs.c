@@ -9,7 +9,6 @@
 #include "global.h"
 #include "mbuf.h"
 #include "iface.h"
-#include "pktdrvr.h"
 #include "ax25.h"
 #include "nrs.h"
 #include "asy.h"
@@ -88,7 +87,7 @@ nrs_encode(bp)
 struct mbuf *bp;
 {
 	struct mbuf *lbp;	/* Mbuf containing line-ready packet */
-	register uint8 *cp;
+	uint8 *cp;
 	int c;
 	uint8 csum = 0;
 
@@ -96,7 +95,7 @@ struct mbuf *bp;
 	 * This is a worst-case guess (consider a packet full of STX's!)
 	 * Add five bytes for STX, ETX, checksum, and two nulls.
 	 */
-	lbp = alloc_mbuf((uint16)(2*len_p(bp) + 5));
+	lbp = alloc_mbuf(2*len_p(bp) + 5);
 	if(lbp == NULL){
 		/* No space; drop */
 		free_p(&bp);
@@ -136,7 +135,7 @@ int dev;	/* net/rom unit number */
 uint8 c;	/* Incoming character */
 {
 	struct mbuf *bp;
-	register struct nrs *sp;
+	struct nrs *sp;
 
 	sp = &Nrs[dev];
 	switch(sp->state) {
@@ -242,8 +241,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct nrs *np;
-	register int i;
+	struct nrs *np;
+	int i;
 
 	printf("Interface   RcvB  NumReceived  CSumErrors\n");
 

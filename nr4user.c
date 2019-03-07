@@ -21,8 +21,8 @@ open_nr4(local,remote,mode,r_upcall,t_upcall,s_upcall,user)
 struct nr4_addr *local ;	/* local node address */
 struct nr4_addr *remote ;	/* destination node address */
 int mode ;			/* active/passive/server */
-void (*r_upcall)(struct nr4cb *,uint16) ;	/* received data upcall */
-void (*t_upcall)(struct nr4cb *,uint16) ;	/* transmit upcall */
+void (*r_upcall)(struct nr4cb *,uint) ;	/* received data upcall */
+void (*t_upcall)(struct nr4cb *,uint) ;	/* transmit upcall */
 void (*s_upcall)(struct nr4cb *,int,int) ;	/* state change upcall */
 int user ;			/* user linkage area */
 {
@@ -116,7 +116,7 @@ struct mbuf **bpp
 struct mbuf *
 recv_nr4(cb,cnt)
 struct nr4cb *cb ;
-uint16 cnt ;
+uint cnt ;
 {
 	struct mbuf *bp ;
 

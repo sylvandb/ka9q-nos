@@ -31,8 +31,8 @@ int check;		/* 0 if checksum test is to be bypassed */
 {
 	struct tcp seg;
 	struct pseudo_header ph;
-	uint16 csum;
-	uint16 dlen;
+	uint csum;
+	uint dlen;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;

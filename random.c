@@ -45,7 +45,7 @@ getrand(buf,len)
 unsigned char *buf;
 int len;
 {
-	uint16 t;
+	uint t;
 	MD5_CTX context;
 	uint8 digest[16];
 	int cnt;
@@ -79,9 +79,9 @@ int len;
  */
 void
 rtype(c)
-uint16 c;
+uint c;
 {
-	uint16 t;
+	uint t;
 	MD5_CTX context;
 
 	MD5Init(&context);

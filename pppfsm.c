@@ -61,7 +61,7 @@ htoncnf(
 struct config_hdr *cnf,
 struct mbuf **bpp
 ){
-	register uint8 *cp;
+	uint8 *cp;
 
 	/* Prepend bytes for LCP/IPCP header */
 	pushdown(bpp, NULL,CONFIG_HDR_LEN);

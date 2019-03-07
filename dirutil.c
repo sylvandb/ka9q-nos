@@ -156,7 +156,6 @@ FILE *file;
 
 	if(full)
 		print_free_space(file, n);
-
 	return 0;
 }
 static int
@@ -206,11 +205,7 @@ void *p;
 {
 	char *path;
 
-	if(argc >= 2)
-		path = argv[1];
-	else
-		path = "*.*";
-
+	path = (argc >= 2) ? argv[1] : "*.*";
 	getdir(path,1,stdout);
 	return 0;
 }
@@ -221,7 +216,11 @@ int argc;
 char *argv[];
 void *p;
 {
+#ifdef	__TURBOC__
 	if(mkdir(argv[1]) == -1)
+#else
+	if(mkdir(argv[1],0777) == -1)
+#endif
 		perror("Can't mkdir");
 	return 0;
 }

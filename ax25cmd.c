@@ -255,7 +255,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 	char tmp[AXBUF];
 
 	if(argc < 2){
@@ -280,7 +280,7 @@ void *p;
 /* Dump one control block */
 void
 st_ax25(axp)
-register struct ax25_cb *axp;
+struct ax25_cb *axp;
 {
 	char tmp[AXBUF];
 
@@ -355,7 +355,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Axversion,"AX25 version",argc,argv);
+	return setint(&Axversion,"AX25 version",argc,argv);
 }
 
 static
@@ -384,7 +384,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&N2,"Retry limit",argc,argv);
+	return setint(&N2,"Retry limit",argc,argv);
 }
 /* Force a retransmission */
 static
@@ -410,7 +410,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Maxframe,"Window size (frames)",argc,argv);
+	return setint(&Maxframe,"Window size (frames)",argc,argv);
 }
 
 /* Set maximum length of I-frame data field */
@@ -420,7 +420,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Paclen,"Max frame length (bytes)",argc,argv);
+	return setint(&Paclen,"Max frame length (bytes)",argc,argv);
 }
 /* Set size of I-frame above which polls will be sent after a timeout */
 static
@@ -429,7 +429,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Pthresh,"Poll threshold (bytes)",argc,argv);
+	return setint(&Pthresh,"Poll threshold (bytes)",argc,argv);
 }
 
 /* Set high water mark on receive queue that triggers RNR */
@@ -439,7 +439,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Axwindow,"AX25 receive window (bytes)",argc,argv);
+	return setint(&Axwindow,"AX25 receive window (bytes)",argc,argv);
 }
 /* End of ax25 subcommands */
 
@@ -483,7 +483,7 @@ void *p;
 	sp->inproc = keychar;	/* Intercept ^C */
 	if((s = socket(AF_AX25,SOCK_STREAM,0)) == -1){
 		printf("Can't create socket\n");
-		freesession(sp);
+		freesession(&sp);
 		keywait(NULL,1);
 		return 1;
 	}
@@ -494,7 +494,7 @@ void *p;
 	setvbuf(sp->network,NULL,_IOLBF,BUFSIZ);
 	if(SETSIG(EABORT)){
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	return tel_connect(sp, (struct sockaddr *)&fsocket, sizeof(struct sockaddr_ax));
@@ -509,7 +509,7 @@ void *p;
 {
 	char tmp[AXBUF];
 	int i,ndigis;
-	register struct ax_route *axr;
+	struct ax_route *axr;
 	uint8 target[AXALEN],digis[MAXDIGIS][AXALEN];
 
 	if(argc < 2){

@@ -46,40 +46,22 @@
 
 struct stopwatch {
 	long calls;
-	uint16 maxval;
-	uint16 minval;
+	uint maxval;
+	uint minval;
 	int32 totval;
 };
 extern struct stopwatch Sw[];
-extern uint16 Intstk[];	/* Interrupt stack defined in pcgen.asm */
-extern uint16 Stktop[];	/* Top of interrupt stack */
+extern uint Intstk[];	/* Interrupt stack defined in pcgen.asm */
+extern uint Stktop[];	/* Top of interrupt stack */
 extern void (*Shutdown[])();	/* List of functions to call at shutdown */
 extern int Mtasker;	/* Type of multitasker, if any */
 
 /* In n8250.c: */
 void asytimer(void);
 
-/* In dos.c: */
-extern unsigned *Refcnt;
-int _creat(const char *file,int mode);
-int _open(const char *file,int mode);
-int dup(int fd);
-int _close(int fd);
-int _read(int fd,void *buf,unsigned cnt);
-int _write(int fd,const void *buf,unsigned cnt);
-long _lseek(int fd,long offset,int whence);
-
-/* In dma.c: */
-unsigned long dma_map(void *p,unsigned short len,int copy);
-void dma_unmap(void *p,int copy);
-int dis_dmaxl(int chan);
-int ena_dmaxl(int chan);
-unsigned long dmalock(void *p,unsigned short len);
-unsigned long dmaunlock(unsigned long physaddr,unsigned short len);
-void *dma_malloc(int32 *physaddr,unsigned short len);
 
 /* In random.c: */
-void rtype(uint16 c);
+void rtype(uint c);
 
 /* In scc.c: */
 void scctimer(void);
@@ -87,43 +69,29 @@ void sccstop(void);
 
 /* In pc.c: */
 long bioscnt(void);
-void clrbit(unsigned port,char bits);
-void ctick(void);
-int32 divrem(int32 dividend,uint16 divisor);
-INTERRUPT  (*getirq(unsigned int))(void);
+uint clockbits(void);
+void clrbit(uint port,uint8 bits);
+void ctick(int);
+int freevect(uint irq);
 int getmask(unsigned irq);
 int intcontext(void);
-void ioinit(void);
+void ioinit(int);
 void iostop(void);
+void kbint(int);
 void kbsave(int c);
 int kbread(void);
 int maskoff(unsigned irq);
 int maskon(unsigned irq);
 void pctick(void);
-void setbit(unsigned port,char bits);
-int setirq(unsigned irq,INTERRUPT (*handler)(void));
+void setbit(uint port,uint8 bits);
+int setvect(uint irq, int chain, void (*func)(int),int arg);
 void sysreset(void);
 void systick(void);
-void writebit(unsigned port,char mask,int val);
-
-/* In pcgen.asm: */
-INTERRUPT btick(void);
-void chktasker(void);
-void chtimer(INTERRUPT (*)());
-int32 divrem(int32 dividend,uint16 divisor);
-uint16 getss(void);
-void giveup(void);
-uint16 kbraw(void);
-uint16 longdiv(uint16 divisor,int n,uint16 *dividend);
-uint16 longmul(uint16 multiplier,int n,uint16 *multiplicand);
-INTERRUPT nullvec(void);
-INTERRUPT kbint(void);
-void uchtimer(void);
-uint16 clockbits(void);
+void writebit(uint port,uint8 mask,int val);
 
 /* In stopwatch.asm: */
 void swstart(void);
-uint16 stopval(void);
+uint stopval(void);
 
 /* In sw.c: */
 void swstop(int n);

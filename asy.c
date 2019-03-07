@@ -12,7 +12,6 @@
 #include "ax25.h"
 #include "kiss.h"
 #include "nrs.h"
-#include "pktdrvr.h"
 #include "slip.h"
 #include "ppp.h"
 #include "commands.h"
@@ -138,7 +137,7 @@ void *p;
 		chain = 1;
 	else
 		chain = 0;
-	asy_init(dev,ifp,base,irq,(uint16)atol(argv[5]),
+	asy_init(dev,ifp,base,irq,atol(argv[5]),
 		trigchar,atol(argv[7]),cts,rlsd,chain);
 	cp = if_name(ifp," tx");
 	ifp->txproc = newproc(cp,768,if_tx,0,ifp,NULL,0);

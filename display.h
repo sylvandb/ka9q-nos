@@ -8,18 +8,20 @@
 #define	MAXARGS	5
 
 struct display {
-	unsigned cookie;	/* Magic cookie to detect bogus pointers */
-#define	D_COOKIE	0xbeef
-	uint8 cols;	/* Screen width */
-	uint8 col;	/* cursor column, 0 to cols-1 */
-	uint8 savcol;	/* Saved cursor column */
+	uint32 cookie;	/* Magic cookie to detect bogus pointers */
+#define	D_COOKIE	0xdeadbeef
+	int cols;	/* Screen width */
+	int col;	/* cursor column, 0 to cols-1 */
+	int savcol;	/* Saved cursor column */
 
-	uint8 rows;	/* Screen height */
-	uint8 row;	/* cursor row, 0 to rows-1 */
-	uint8 savrow;	/* Saved cursor row */
+	int rows;	/* Screen height */
+	int row;	/* cursor row, 0 to rows-1 */
+	int savrow;	/* Saved cursor row */
 
-	uint8 slast;	/* Last row in scrolled region */
-	int scroll;	/* Scroll offset */
+	int virttop;	/* Offset to start of virtual screen in buffer */
+	int realtop;	/* Offset to start of real screen in buffer */
+	int maxtop;	/* Max offset touched */
+	int size;	/* Size of memory buffer in rows */
 
 	int argi;	/* index to current entry in arg[] */
 	int arg[MAXARGS];	/* numerical args to ANSI sequence */
@@ -49,21 +51,18 @@ struct display {
 		uint8 lcol;	/* Leftmost dirty column */
 		uint8 rcol;	/* Rightmost dirty column */
 	} *dirty;		/* One per line */
-
 	uint8 *tabstops;	/* Tab stops */
-
-	FILE *sfile;	/* Save file for scrollback */
-	long sfseek;	/* Write pointer for scrollback file */
-	long sfoffs;	/* Scrollback offset */
-	long sfsize;	/* Size of scrollback file, lines */
-	long sflimit;	/* Limit on sfsize */
 };
+#define	COLS	80
+#define	ROWS	25
+extern uint8 Statbuf[];
+extern struct dirty Stdirt;
 
 struct display *newdisplay(int rows,int cols,int noscrol,int sfsize);
-void displaywrite(struct display *dp,void *buf,int cnt);
+void displaywrite(struct display *dp,const void *buf,int cnt);
 void dupdate(struct display *dp);
 void closedisplay(struct display *dp);
-void statwrite(struct display *dp,int col,void *buf,int cnt,int attrib);
+void statwrite(int col,void *buf,int cnt,int attrib);
 void dscrollmode(struct display *dp,int flag);
 void dhome(struct display *dp);
 void dend(struct display *dp);

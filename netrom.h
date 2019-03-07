@@ -193,7 +193,7 @@ int nr_send(struct mbuf **bp,struct iface *iface,int32 gateway,uint8 tos);
 void nr_sendraw(uint8 *dest,unsigned family,unsigned proto,
 	struct mbuf **data);
 void nr3output(uint8 *dest,struct mbuf **data);
-uint16 nrhash(uint8 *s);
+uint nrhash(uint8 *s);
 struct raw_nr *raw_nr(uint8);
 
 /* In nrcmd.c: */

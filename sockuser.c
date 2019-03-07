@@ -31,7 +31,7 @@ int flags;	/* Unused; will eventually select oob data, etc */
 	cnt = recv_mbuf(s,&bp,flags,NULL,(int *)NULL);
 	if(cnt > 0){
 		cnt = min(cnt,len);
-		pullup(&bp,buf,(uint16)cnt);
+		pullup(&bp,buf,cnt);
 		free_p(&bp);
 	}
 	return cnt;
@@ -55,7 +55,7 @@ int *fromlen;		/* Length of source address */
 	cnt = recv_mbuf(s,&bp,flags,from,fromlen);
 	if(cnt > 0){
 		cnt = min(cnt,len);
-		pullup(&bp,buf,(uint16)cnt);
+		pullup(&bp,buf,cnt);
 		free_p(&bp);
 	}
 	return cnt;
@@ -64,7 +64,7 @@ int *fromlen;		/* Length of source address */
 int
 send(s,buf,len,flags)
 int s;		/* Socket index */
-void *buf;	/* User buffer */
+const void *buf;	/* User buffer */
 int len;	/* Length of buffer */
 int flags;	/* Unused; will eventually select oob data, etc */
 {
@@ -74,7 +74,7 @@ int flags;	/* Unused; will eventually select oob data, etc */
 
 	if(getpeername(s,&sock,&i) == -1)
 		return -1;
-	bp = qdata(buf,(uint16)len);
+	bp = qdata(buf,len);
 	return send_mbuf(s,&bp,flags,&sock,i);
 }
 /* High level send routine, intended for datagram sockets. Can be used on
@@ -91,6 +91,6 @@ int tolen		/* Length of destination */
 ){
 	struct mbuf *bp;
 
-	bp = qdata(buf,(uint16)len);
+	bp = qdata(buf,len);
 	return send_mbuf(s,&bp,flags,to,tolen);
 }

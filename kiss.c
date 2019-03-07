@@ -13,9 +13,8 @@
 
 /* Set up a SLIP link to use AX.25 */
 int
-kiss_init(
-struct iface *ifp
-){
+kiss_init(struct iface *ifp)
+{
 	int xdev;
 	struct slip *sp;
 	char *ifn;
@@ -48,9 +47,8 @@ struct iface *ifp
 	return 0;
 }
 int
-kiss_free(
-struct iface *ifp
-){
+kiss_free(struct iface *ifp)
+{
 	if(Slip[ifp->xdev].iface == ifp)
 		Slip[ifp->xdev].iface = NULL;
 	return 0;

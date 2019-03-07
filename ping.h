@@ -17,12 +17,12 @@ struct ping {
 	int32 minrtt;		/* Minimum rtt */
 	int32 responses;	/* Total number of responses */
 	int32 interval;		/* Inter-ping interval, ticks */
-	uint16 len;		/* Length of data portion of ping */
+	uint len;		/* Length of data portion of ping */
 };
 
 /* In ping.c: */
 void echo_proc(int32 source,int32 dest,struct icmp *icmp,struct mbuf **bpp);
-int pingem(int s,int32 target,uint16 seq,uint16 id,uint16 len);
+int pingem(int s,int32 target,uint seq,uint id,uint len);
 
 #endif /* _PING_H */
 

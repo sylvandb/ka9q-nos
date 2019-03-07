@@ -14,7 +14,7 @@
 
 /* Table for LCP configuration requests */
 struct lcp_value_s {
-	uint16 negotiate;		/* negotiation flags */
+	uint negotiate;		/* negotiation flags */
 #define LCP_N_MRU		(1 << LCP_MRU)
 #define LCP_N_ACCM		(1 << LCP_ACCM)
 #define LCP_N_AUTHENT		(1 << LCP_AUTHENT)
@@ -24,10 +24,10 @@ struct lcp_value_s {
 #define LCP_N_PFC		(1 << LCP_PFC)
 #define LCP_N_ACFC		(1 << LCP_ACFC)
 
-	uint16 mru;			/* Maximum Receive Unit */
+	uint mru;			/* Maximum Receive Unit */
 	int32 accm;			/* Async Control Char Map */
-	uint16 authentication;		/* Authentication protocol */
-	uint16 encryption;		/* Encryption protocol */
+	uint authentication;		/* Authentication protocol */
+	uint encryption;		/* Encryption protocol */
 	int32 magic_number;		/* Magic number value */
 	int32 reporting_period;		/* Link Quality reporting period */
 };
@@ -55,7 +55,7 @@ struct lcp_value_s {
  */
 
 struct lcp_side_s {
-	uint16	will_negotiate;
+	uint	will_negotiate;
 	struct lcp_value_s want;
 	struct lcp_value_s work;
 };

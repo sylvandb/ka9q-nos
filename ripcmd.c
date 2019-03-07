@@ -102,8 +102,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	del_udp(Rip_cb);
-	Rip_cb = NULL;
+	del_udp(&Rip_cb);
 	return 0;
 }
 int
@@ -112,12 +111,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 replyport;
+	uint replyport;
 
-	if(argc > 2)
-		replyport = atoi(argv[2]);
-	else
-		replyport = RIP_PORT;
+	replyport = (argc > 2) ? atoi(argv[2]) : RIP_PORT;
 	return ripreq(resolve(argv[1]),replyport);
 }
 /* Dump RIP statistics */
@@ -156,7 +152,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	return setshort(&Rip_trace,"RIP tracing",argc,argv);
+	return setint(&Rip_trace,"RIP tracing",argc,argv);
 }
 int
 doripmerge(argc,argv,p)

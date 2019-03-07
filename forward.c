@@ -8,6 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
 #include "global.h"
 #include "config.h"
 #include "bm.h"
@@ -533,7 +534,7 @@ timeok(line)
 char *line;
 {
 	char hours[80], *now;
-	long t;
+	time_t t;
 	int t1, t2, pos = 2;
 	findident(line,pos++,hours);
 	if(*hours == '\0')

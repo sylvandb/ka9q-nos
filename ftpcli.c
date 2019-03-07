@@ -2,6 +2,7 @@
  * Copyright 1991 Phil Karn, KA9Q
  */
 #include <stdio.h>
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "session.h"
@@ -115,21 +116,21 @@ void *p;
 
 	if(SETSIG(EABORT)){
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("Resolving %s...\n",argv[1]);
 	if((fsocket.sin_addr.s_addr = resolve(argv[1])) == 0){
 		printf(Badhost,argv[1]);
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	/* Open the control connection */
 	if((s = socket(AF_INET,SOCK_STREAM,0)) == -1){
 		printf("Can't create socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	if(SETSIG(EABORT)){
@@ -239,8 +240,7 @@ quit:	cp = sockerr(fileno(control));
 		sp->network = NULL;
 	}
 	keywait(NULL,1);
-	if(ftp.session != NULL)
-		freesession(ftp.session);
+	freesession(&ftp.session);
 	return 0;
 }
 
@@ -251,11 +251,11 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	if((ftp = (struct ftpcli *)p) == NULL)
 		return -1;
-	return setshort(&ftp->verbose,"Verbose",argc,argv);
+	return setint(&ftp->verbose,"Verbose",argc,argv);
 }
 /* Enable/disable command batching */
 static int
@@ -264,7 +264,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	if((ftp = (struct ftpcli *)p) == NULL)
 		return -1;
@@ -277,7 +277,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	if((ftp = (struct ftpcli *)p) == NULL)
 		return -1;
@@ -290,7 +290,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	if((ftp = (struct ftpcli *)p) == NULL)
 		return -1;
@@ -305,7 +305,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL)
@@ -323,7 +323,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL)
@@ -338,7 +338,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL)
@@ -353,7 +353,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL)
@@ -391,7 +391,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL)
@@ -440,7 +440,7 @@ char *argv[];
 void *p;
 {
 	char *remotename,*localname;
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *fp;
 	char *mode;
 
@@ -480,7 +480,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	if((ftp = (struct ftpcli *)p) == NULL){
 		printf(Notsess);
@@ -496,7 +496,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *files,*fp;
 	char *buf,*mode;
 	int i;
@@ -564,7 +564,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *fp;
 
 	ftp = (struct ftpcli *)p;
@@ -595,7 +595,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *fp;
 
 	if((ftp = (struct ftpcli *)p) == NULL){
@@ -623,7 +623,7 @@ char *argv[];
 void *p;
 {
 	char *remotename;
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *control;
 	int resp;
 	int typewait = 0;
@@ -670,7 +670,7 @@ char *argv[];
 void *p;
 {
 	char *remotename,*localname;
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 
 	ftp = (struct ftpcli *)p;
 	if(ftp == NULL){
@@ -696,7 +696,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *files;
 	char *buf;
 	int i;
@@ -833,7 +833,7 @@ failure:;
  */
 static long
 getsub(ftp,command,remotename,fp)
-register struct ftpcli *ftp;
+struct ftpcli *ftp;
 char *command,*remotename;
 FILE *fp;
 {
@@ -996,7 +996,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	char *remotename,*localname;
 
 	if((ftp = (struct ftpcli *)p) == NULL){
@@ -1019,7 +1019,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct ftpcli *ftp;
+	struct ftpcli *ftp;
 	FILE *files;
 	int i;
 	char *buf;
@@ -1057,7 +1057,7 @@ void *p;
  */
 static long
 putsub(ftp,remotename,localname)
-register struct ftpcli *ftp;
+struct ftpcli *ftp;
 char *remotename,*localname;
 {
 	char *mode;

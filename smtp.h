@@ -65,7 +65,7 @@ extern char *Maillock;		/* Mail system lock */
 extern char *Alias;		/* File of local aliases */
 
 /* In smtpserv.c: */
-char *ptime(long *t);
+char *ptime(time_t *t);
 long get_msgid(void);
 char *getname(char *cp);
 int validate_address(char *s);

@@ -8,9 +8,9 @@
 #include "usock.h"
 
 static void autobind(struct usock *up);
-static void s_nrcall(struct nr4cb *cb,uint16 cnt);
+static void s_nrcall(struct nr4cb *cb,uint cnt);
 static void s_nscall(struct nr4cb *cb,int old,int new);
-static void s_ntcall(struct nr4cb *cb,uint16 cnt);
+static void s_ntcall(struct nr4cb *cb,uint cnt);
 
 int
 so_n3_sock(up,protocol)
@@ -135,7 +135,7 @@ int *fromlen;
 	struct nr4cb *nr4;
 
 	while((nr4 = up->cb.nr4) != NULL
-	 && (*bpp = recv_nr4(nr4,(uint16)0)) == NULL){
+	 && (*bpp = recv_nr4(nr4,0)) == NULL){
 		if(up->noblock){
 			errno = EWOULDBLOCK;
 			return -1;
@@ -312,7 +312,7 @@ struct usock *up;
 static void
 s_nrcall(cb,cnt)
 struct nr4cb *cb;
-uint16 cnt;
+uint cnt;
 {
 	/* Wake up anybody waiting for data, and let them run */
 	ksignal(itop(cb->user),1);
@@ -322,7 +322,7 @@ uint16 cnt;
 static void
 s_ntcall(cb,cnt)
 struct nr4cb *cb;
-uint16 cnt;
+uint cnt;
 {
 	/* Wake up anybody waiting to send data, and let them run */
 	ksignal(itop(cb->user),1);

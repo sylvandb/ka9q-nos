@@ -31,7 +31,7 @@ struct ppp_hdr {
 #define HDLC_ALL_ADDR		0xff	/* HDLC all-station */
 	byte_t control;
 #define HDLC_UI			0x03	/* HDLC Unnumbered Information */
-	uint16 protocol;
+	uint protocol;
 #define PPP_IP_PROTOCOL		0x0021	/* Internet Protocol */
 #define PPP_COMPR_PROTOCOL	0x002d	/* Van Jacobson Compressed TCP/IP */
 #define PPP_UNCOMP_PROTOCOL	0x002f	/* Van Jacobson Uncompressed TCP/IP */
@@ -56,7 +56,7 @@ struct ppp_hdr {
 int ppp_send(struct mbuf **data,struct iface *iface,int32 gateway,
 	uint8 tos);
 int ppp_output(struct iface *iface, char dest[], char source[],
-	uint16 type, struct mbuf **data);
+	uint type, struct mbuf **data);
 
 int ppp_init(struct iface *iface);
 int ppp_free(struct iface *iface);

@@ -8,7 +8,6 @@
 #include "global.h"
 #include "mbuf.h"
 #include "iface.h"
-#include "pktdrvr.h"
 #include "netuser.h"
 #include "arp.h"
 #include "slip.h"
@@ -125,7 +124,7 @@ struct raw_nr *
 raw_nr(protocol)
 uint8 protocol;
 {
-	register struct raw_nr *rp;
+	struct raw_nr *rp;
 
 	rp = (struct raw_nr *)callocw(1,sizeof(struct raw_nr));
 	rp->protocol = protocol;
@@ -140,7 +139,7 @@ void
 del_rnr(rpp)
 struct raw_nr *rpp;
 {
-	register struct raw_nr *rp;
+	struct raw_nr *rp;
 
 	/* Do sanity check on arg */
 	for(rp = Raw_nr;rp != NULL;rp = rp->next)
@@ -168,7 +167,7 @@ static int
 ismycall(addr)
 uint8 *addr;
 {
-	register int i;
+	int i;
 	int found = 0;
 	
 	for(i = 0; i < Nr_numiface; i++)
@@ -193,9 +192,9 @@ struct ax25_cb *iaxp;			/* incoming ax25 control block */
 	struct ax25_cb *axp;
 	struct mbuf *hbp, *pbp;
 	struct raw_nr *rnr;
-	register struct nrnbr_tab *np;
-	register struct nrroute_tab *rp;
-	register struct nr_bind *bindp;
+	struct nrnbr_tab *np;
+	struct nrroute_tab *rp;
+	struct nr_bind *bindp;
 	struct iface *iface;
 	unsigned ifnum;
 	
@@ -335,7 +334,7 @@ unsigned ifno;
 	struct nr_bind * bp;
 	struct nr3dest nrdest;
 	int i, didsend = 0, numdest = 0;
-	register uint8 *cp;
+	uint8 *cp;
 	struct iface *axif = Nrifaces[ifno].iface;
 	
 	/* prepare the header */
@@ -520,7 +519,7 @@ struct iface *iface,
 uint8 *source,
 struct mbuf **bpp
 ){
-	register int ifnum;
+	int ifnum;
 	char bcalias[AXALEN];
 	struct nr3dest ds;
 	
@@ -587,18 +586,18 @@ struct mbuf **bpp
 /* The following are utilities for manipulating the routing table */
 
 /* hash function for callsigns.  Look familiar? */
-uint16
+uint
 nrhash(s)
 uint8 *s;
 {
-	register uint8 x;
-	register int i;
+	uint8 x;
+	int i;
 
 	x = 0;
 	for(i = ALEN; i !=0; i--)
 		x ^= *s++ & 0xfe;
 	x ^= *s & SSID;
-	return (uint16)(x % NRNUMCHAINS);
+	return x % NRNUMCHAINS;
 }
 
 /* Find a neighbor table entry.  Neighbors are determined by
@@ -610,11 +609,11 @@ uint8 *s;
  */
 static struct nrnbr_tab *
 find_nrnbr(addr,ifnum)
-register uint8 *addr;
+uint8 *addr;
 unsigned ifnum;
 {
-	uint16 hashval;
-	register struct nrnbr_tab *np;
+	uint hashval;
+	struct nrnbr_tab *np;
 
 	/* Find appropriate hash chain */
 	hashval = nrhash(addr);
@@ -633,10 +632,10 @@ unsigned ifnum;
 /* Find a route table entry */
 struct nrroute_tab *
 find_nrroute(addr)
-register uint8 *addr;
+uint8 *addr;
 {
-	uint16 hashval;
-	register struct nrroute_tab *rp;
+	uint hashval;
+	struct nrroute_tab *rp;
 
 	/* Find appropriate hash chain */
 	hashval = nrhash(addr);
@@ -659,7 +658,7 @@ find_nralias(alias)
 char *alias;
 {
 	int i;
-	register struct nrroute_tab *rp;
+	struct nrroute_tab *rp;
 
 	/* Since the route entries are hashed by ax.25 address, we'll */
 	/* have to search all the chains */
@@ -679,9 +678,9 @@ char *alias;
 static struct nr_bind *
 find_binding(list,neighbor)
 struct nr_bind *list;
-register struct nrnbr_tab *neighbor;
+struct nrnbr_tab *neighbor;
 {
-	register struct nr_bind *bp;
+	struct nr_bind *bp;
 
 	for(bp = list; bp != NULL; bp = bp->next)
 		if(bp->via == neighbor)
@@ -696,7 +695,7 @@ struct nr_bind *
 find_worst(list)
 struct nr_bind *list;
 {
-	register struct nr_bind *bp;
+	struct nr_bind *bp;
 	struct nr_bind *worst = NULL;
 	unsigned minqual = 1000;	/* infinity */
 
@@ -721,7 +720,7 @@ find_best(list,obso)
 struct nr_bind *list;
 unsigned obso;
 {
-	register struct nr_bind *bp;
+	struct nr_bind *bp;
 	struct nr_bind *best = NULL;
 	int maxqual = -1;	/* negative infinity */
 
@@ -750,7 +749,7 @@ unsigned record;	/* 1 if route is a "record route" */
 	struct nrroute_tab *rp;
 	struct nr_bind *bp;
 	struct nrnbr_tab *np;
-	uint16 rhash, nhash;
+	uint rhash, nhash;
 
 	/* See if a routing table entry exists for this destination */
 	if((rp = find_nrroute(dest)) == NULL){
@@ -840,9 +839,9 @@ nr_routedrop(dest,neighbor,ifnum)
 uint8 *dest, *neighbor;
 unsigned ifnum;
 {
-	register struct nrroute_tab *rp;
-	register struct nrnbr_tab *np;
-	register struct nr_bind *bp;
+	struct nrroute_tab *rp;
+	struct nrnbr_tab *np;
+	struct nr_bind *bp;
 
 	if((rp = find_nrroute(dest)) == NULL)
 		return -1;
@@ -898,8 +897,8 @@ static uint8 *
 nr_getroute(dest)
 uint8 *dest;
 {
-	register struct nrroute_tab *rp;
-	register struct nr_bind *bp;
+	struct nrroute_tab *rp;
+	struct nr_bind *bp;
 
 	if((rp = find_nrroute(dest)) == NULL)
 		return NULL;
@@ -914,11 +913,11 @@ uint8 *dest;
 /* Find an entry in the filter table */
 static struct nrnf_tab *
 find_nrnf(addr,ifnum)
-register uint8 *addr;
+uint8 *addr;
 unsigned ifnum;
 {
-	uint16 hashval;
-	register struct nrnf_tab *fp;
+	uint hashval;
+	struct nrnf_tab *fp;
 
 	/* Find appropriate hash chain */
 	hashval = nrhash(addr);
@@ -942,7 +941,7 @@ uint8 *addr;
 unsigned ifnum;
 {
 	struct nrnf_tab *fp;
-	uint16 hashval;
+	uint hashval;
 	
 	if(find_nrnf(addr,ifnum) != NULL)
 		return 0;	/* already there; it's a no-op */

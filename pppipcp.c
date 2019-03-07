@@ -37,7 +37,7 @@ static struct ipcp_value_s ipcp_default = {
 };
 
 /* for test purposes, accept anything we understand */
-static uint16 ipcp_negotiate = IPCP_N_ADDRESS | IPCP_N_COMPRESS;
+static uint ipcp_negotiate = IPCP_N_ADDRESS | IPCP_N_COMPRESS;
 
 static byte_t option_length[] = {
 	 0,		/* unused */
@@ -62,7 +62,7 @@ static void ipcp_option(struct mbuf **bpp,
 			struct mbuf **copy_bpp);
 static void ipcp_makeoptions(struct mbuf **bpp,
 			struct ipcp_value_s *value_p,
-			uint16 negotiating);
+			uint negotiating);
 static struct mbuf *ipcp_makereq(struct fsm_s *fsm_p);
 
 static int ipcp_check(struct mbuf **bpp,
@@ -156,8 +156,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp = p;
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct iface *ifp = p;
+	struct ppp_s *ppp_p = ifp->edv;
 
 	return subcmd(IPcpcmds, argc, argv, &(ppp_p->fsm[IPcp]));
 }
@@ -356,8 +356,8 @@ byte_t o_length;
 struct mbuf **copy_bpp;
 {
 	struct mbuf *bp;
-	register uint8 *cp;
-	register int toss = o_length - OPTION_HDR_LEN;
+	uint8 *cp;
+	int toss = o_length - OPTION_HDR_LEN;
 
 	if ((bp = alloc_mbuf(o_length)) == NULL) {
 		return;
@@ -424,9 +424,9 @@ static void
 ipcp_makeoptions(bpp, value_p, negotiating)
 struct mbuf **bpp;
 struct ipcp_value_s *value_p;
-uint16 negotiating;
+uint negotiating;
 {
-	register int o_type;
+	int o_type;
 
 	PPP_DEBUG_ROUTINES("ipcp_makeoptions()");
 
@@ -614,7 +614,7 @@ struct mbuf **data
 	int32 signed_length = config->len;
 	struct mbuf *reply_bp = NULL;	/* reply packet */
 	int reply_result = CONFIG_ACK;		/* reply to request */
-	uint16 desired;				/* desired to negotiate */
+	uint desired;				/* desired to negotiate */
 	struct option_hdr option;		/* option header storage */
 	int option_result;			/* option reply */
 
@@ -728,8 +728,8 @@ struct mbuf **data
 		PPP_DEBUG_CHECKS("IPCP ACK: buffer length mismatch");
 		error = TRUE;
 	} else {
-		register int req_char;
-		register int ack_char;
+		int req_char;
+		int ack_char;
 
 		/* Each byte should match */
 		while ((req_char = pullchar(&req_bp)) != -1) {
@@ -841,7 +841,7 @@ struct mbuf **data
 
 	/* Process in order, checking for errors */
 	while (signed_length > 0  &&  ntohopt(&option, data) != -1) {
-		register int k;
+		int k;
 
 		if ((signed_length -= option.len) < 0) {
 			PPP_DEBUG_CHECKS("IPCP REJ: bad header length");

@@ -311,7 +311,7 @@ struct smtpsv *mp;
 {
 	char buf[LINELEN];
 	register char *p = buf;
-	long t;
+	time_t t;
 	FILE *network;
 	FILE *data;
 	char *cp;
@@ -546,7 +546,7 @@ struct list *tolist;
 /* Return Date/Time in Arpanet format in passed string */
 char *
 ptime(t)
-long *t;
+time_t *t;
 {
 	/* Print out the time and date field as
 	 *		"DAY day MONTH year hh:mm:ss ZONE"
@@ -821,7 +821,7 @@ char *user;
 			}
 			rrp = rrp->next;
 		}
-		free_rr(rrlp);
+		free_rr(&rrlp);
 		if(inalias)
 			return tp;
 		else
@@ -881,7 +881,7 @@ smtplog(char *fmt, ...)
 {
 	va_list ap;
 	char *cp;
-	long t;
+	time_t t;
 	FILE *fp;
 
 	if ((fp = fopen(Maillog,APPEND_TEXT)) == NULL)

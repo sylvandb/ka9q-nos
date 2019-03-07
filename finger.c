@@ -73,7 +73,7 @@ void *p;
 		sp->network = NULL;
 	}
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 static int

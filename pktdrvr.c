@@ -1,8 +1,12 @@
 /* Driver for FTP Software's packet driver interface. (PC specific code)
- * Copyright 1991 Phil Karn, KA9Q
+ * Rewritten Feb 1996 for DPMI with DJGPP Phil Karn
  */
+#include <sys/types.h>
 #include <stdio.h>
+#include <go32.h>
 #include <dos.h>
+#include <dpmi.h>
+
 #include "global.h"
 #include "proc.h"
 #include "mbuf.h"
@@ -19,9 +23,9 @@
 #include "config.h"
 #include "devparam.h"
 
+#define	C_FLAG	1
 static long access_type(int intno,int if_class,int if_type,
-	int if_number, uint8 *type,unsigned typelen,
-	INTERRUPT (*receiver)(void) );
+	int if_number, uint rm_segment,uint rm_offset );
 static int driver_info(int intno,int handle,int *version,
 	int *class,int *type,int *number,int *basic);
 static int release_type(int intno,int handle);
@@ -29,13 +33,14 @@ static int get_address(int intno,int handle,uint8 *buf,int len);
 static int set_rcv_mode(int intno,int handle,int mode);
 static int pk_raw(struct iface *iface,struct mbuf **bpp);
 static int pk_stop(struct iface *iface);
-static int send_pkt(int intno,uint8 *buffer,unsigned length);
+static void pkint(_go32_dpmi_registers *reg);
 
-
-static INTERRUPT (*Pkvec[])() = { pkvec0,pkvec1,pkvec2 };
 static struct pktdrvr Pktdrvr[PK_MAX];
 static int Derr;
-char Pkt_sig[] = "PKT DRVR";	/* Packet driver signature */
+
+void sim_tx(int dev,void *arg1,void *unused);	/*****/
+void pk_rx(int dev,void *p1,void *p2);
+
 
 /*
  * Send routine for packet driver
@@ -61,9 +66,10 @@ pk_raw(
 struct iface *iface,	/* Pointer to interface control block */
 struct mbuf **bpp	/* Data field */
 ){
-	register struct pktdrvr *pp;
-	uint16 size;
-	struct mbuf *bp1;
+	_go32_dpmi_registers reg;
+	struct pktdrvr *pp;
+	uint size;
+	int offset;
 
 	iface->rawsndcnt++;
 	iface->lastsent = secclock();
@@ -78,19 +84,13 @@ struct mbuf **bpp	/* Data field */
 		if(size < RUNT){
 			/* Pad the packet out to the minimum */
 #ifdef	SECURE
-			/* This option copies the packet to a new mbuf,
-			 * padded out with zeros. Otherwise we just lie
-			 * to the packet driver about the length, and it
-			 * will spit out bytes beyond the end of the mbuf
-			 * that might be compromising. The cost is another
-			 * alloc, free and copy.
-			 */
-			bp1 = ambufw(RUNT);
-			bp1->cnt = RUNT;
-			memset(bp1->data+size,0,RUNT-size);
-			pullup(bpp,bp1->data,size);
-			free_p(bpp);	/* Shouldn't be necessary */
-			*bpp = bp1;
+			/* Do it securely with zeros */
+			struct mbuf *bp1;
+
+			bp1 = ambufw(RUNT-size);
+			bp1->cnt = RUNT-size;
+			memset(bp->data,0,bp1->cnt);
+			append(bpp,&bp1);
 #endif
 			size = RUNT;
 		}
@@ -104,61 +104,101 @@ struct mbuf **bpp	/* Data field */
 		size++;
 		break;
 	}
-	if((*bpp)->next != NULL){
-		/* Copy to contiguous buffer, since driver can't handle mbufs */
-		bp1 = copy_p(*bpp,size);
-		free_p(bpp);
-		*bpp = bp1;
-		if(*bpp == NULL)
-			return -1;
+	/* Copy packet to contiguous real mode buffer */
+	offset = 0;
+	while(*bpp != NULL){
+		dosmemput((*bpp)->data,(*bpp)->cnt,_go32_info_block.linear_address_of_transfer_buffer+offset);
+		offset += (*bpp)->cnt;
+		free_mbuf(bpp);
 	}
-	send_pkt(pp->intno,(*bpp)->data,size);
-	free_p(bpp);
+	/* Call the packet driver to send it */
+	memset(&reg,0,sizeof(reg));
+	reg.h.ah = SEND_PKT;
+	reg.x.si = _go32_info_block.linear_address_of_transfer_buffer & 15;
+	reg.x.ds = _go32_info_block.linear_address_of_transfer_buffer >> 4;
+	reg.x.cx = size;
+	_go32_dpmi_simulate_int(pp->intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
+		return -1;
+	} else
+		return 0;
 	return 0;
 }
+
 
 /* Packet driver receive upcall routine. Called by the packet driver TSR
  * twice for each incoming packet: first with ax == 0 to allocate a buffer,
  * and then with ax == 1 to signal completion of the copy.
- *
- * The packet driver actually calls an assembler hook (pkvec* in pkvec.s)
- * that passes the driver's ax and cx registers to us as args.
- * It then passes our return value back to the packet driver in es:di.
- *
- * Note that pushing es and di to us as args that we can modify only
- * works reliably when the function is of type "interrupt". Otherwise the
- * compiler can cache the args in registers and optimize out the stores back
- * into the stack since C args are normally call-by-value.
  */
-uint8 *
-pkint(
-int dev,
-unsigned short cx,
-unsigned short ax
-){
-	register struct pktdrvr *pp;
-	uint8 *retval = NULL;	
+static void
+pkint(_go32_dpmi_registers *reg)
+{
+	int i;
+	uint len,blen;
+	int i_state;
+	struct mbuf *buffer;
+	struct pktdrvr *pp;
 
-	if(dev < 0 || dev >= PK_MAX)
-		return NULL;	/* Unknown device */
-	pp = &Pktdrvr[dev];
-	if(pp->iface == NULL)
-		return NULL;	/* Unknown device */
-	switch(ax){
+	i_state = disable();
+	/* This is not really legal, since handles are not guaranteed to
+	 * be globally unique. But it's extremely expedient.
+	 */
+	for(i=0;i<PK_MAX;i++){
+		if(Pktdrvr[i].handle == reg->x.bx)
+			break;
+	}
+	if(i == PK_MAX){
+		restore(i_state);
+		reg->x.es = reg->x.di = 0;
+		return;	/* Unknown handle */
+	}
+	pp = &Pktdrvr[i];
+	len = reg->x.cx;
+
+	switch(reg->x.ax){
 	case 0:	/* Space allocate call */
-		if((pp->buffer = alloc_mbuf(cx+sizeof(struct iface *))) != NULL){
-			pp->buffer->data += sizeof(struct iface *);
-			pp->buffer->cnt = cx;
-			retval = pp->buffer->data;
+		if(len + sizeof(len) > pp->dossize - pp->cnt){
+			/* Buffer overflow */
+			reg->x.es = 0;
+			reg->x.di = 0;
+			pp->overflows++;
+			break;
 		}
+		if(pp->wptr + len + sizeof(len) > pp->dossize){
+			/* Not enough room at end of DOS buffer for length
+			 * plus data, so write zero length and wrap around
+			 */
+			uint zero = 0;
+			pp->cnt += pp->dossize - pp->wptr;
+			dosmemput(&zero,sizeof(zero),pp->dosbase+pp->wptr);
+			pp->wptr = 0;
+		}
+		/* Write length into DOS buffer */
+		dosmemput(&len,sizeof(len),pp->dosbase+pp->wptr);
+		pp->wptr += sizeof(len);
+		pp->cnt += sizeof(len);
+		/* Pass new pointer to packet driver */
+		reg->x.es = (pp->dosbase+pp->wptr) / 16;
+		reg->x.di = (pp->dosbase+pp->wptr) % 16;
 		break;
 	case 1:	/* Packet complete call */
-		net_route(pp->iface,&pp->buffer);
-		break;
+		/* blen is len rounded up to next boundary, to keep the
+		 * next packet on a clean boundary
+		 */
+		blen = (len + sizeof(len) - 1) & ~(sizeof(len)-1);
+		pp->wptr += blen;
+		pp->cnt += blen;
+		if(pp->wptr + sizeof(len) > pp->dossize){
+			/* No room left for another len field, wrap */
+			pp->cnt += pp->dossize - pp->wptr;
+			pp->wptr = 0;
+		}
+		ksignal(&pp->cnt,1);
 	default:
 		break;
 	}
-	return retval;
+	restore(i_state);
 }
 
 /* Shut down the packet interface */
@@ -167,24 +207,25 @@ pk_stop(
 struct iface *iface
 ){
 	struct pktdrvr *pp;
+	_go32_dpmi_seginfo dosmem;
 
 	pp = &Pktdrvr[iface->dev];
 	/* Call driver's release_type() entry */
-	if(release_type(pp->intno,pp->handle1) == -1)
+	if(release_type(pp->intno,pp->handle) == -1)
 		printf("%s: release_type error code %u\n",iface->name,Derr);
 
-	if(pp->class == CL_ETHERNET || pp->class == CL_ARCNET){
-		release_type(pp->intno,pp->handle2);
-		release_type(pp->intno,pp->handle3);
-	}
 	pp->iface = NULL;
+	dosmem.size = pp->dossize/16;
+	dosmem.rm_segment = pp->dosbase / 16;
+	_go32_dpmi_free_dos_memory(&dosmem);
+	_go32_dpmi_free_real_mode_callback(&pp->rmcb_seginfo);
 	return 0;
 }
 /* Attach a packet driver to the system
  * argv[0]: hardware type, must be "packet"
  * argv[1]: software interrupt vector, e.g., x7e
  * argv[2]: interface label, e.g., "trw0"
- * argv[3]: maximum number of packets allowed on transmit queue, e.g., "5"
+ * argv[3]: receive buffer size in kb
  * argv[4]: maximum transmission unit, bytes, e.g., "1500"
  * argv[5]: IP address (optional)
  */
@@ -194,24 +235,22 @@ int argc,
 char *argv[],
 void *p
 ){
-	register struct iface *if_pk;
+	struct iface *if_pk;
 	int class,type;
+	char sig[9];
 	unsigned int intno;
-	static uint8 iptype[] = {IP_TYPE >> 8,IP_TYPE};
-	static uint8 arptype[] = {ARP_TYPE >> 8,ARP_TYPE};
-	static uint8 revarptype[] = {REVARP_TYPE >> 8, REVARP_TYPE};
 	long handle;
 	int i;
 #ifdef	ARCNET
 	static uint8 arcip[] = {ARC_IP};
 	static uint8 arcarp[] = {ARC_ARP};
 #endif
-
-	long drvvec;
-	char sig[8];	/* Copy of driver signature "PKT DRVR" */
-	register struct pktdrvr *pp;
+	struct pktdrvr *pp;
 	char tmp[25];
 	char *cp;
+	unsigned long pkt_addr;
+	unsigned short vec[2];
+	_go32_dpmi_seginfo dosmem;
 
 	for(i=0;i<PK_MAX;i++){
 		if(Pktdrvr[i].iface == NULL)
@@ -225,25 +264,43 @@ void *p
 		printf("Interface %s already exists\n",argv[2]);
 		return -1;
 	}
-
 	intno = htoi(argv[1]);
 	/* Verify that there's really a packet driver there, so we don't
 	 * go off into the ozone (if there's any left)
 	 */
-	drvvec = (long)getvect(intno);
-	movblock(FP_OFF(drvvec)+3, FP_SEG(drvvec),
-		FP_OFF(sig),FP_SEG(sig),strlen(Pkt_sig));
-	if(strncmp(sig,Pkt_sig,strlen(Pkt_sig)) != 0){
+	dosmemget(intno*4,4,vec);
+	pkt_addr = vec[1] * 16 + vec[0];
+	if(pkt_addr == 0){
 		printf("No packet driver loaded at int 0x%x\n",intno);
 		return -1;
 	}
+	dosmemget(pkt_addr+3,9,sig);
+	if(strcmp(sig,"PKT DRVR") != 0){
+		printf("No packet driver loaded at int 0x%x\n",intno);
+		return -1;
+	}
+	/* Find out what we've got */
+ 	if(driver_info(intno,-1,NULL,&class,&type,NULL,NULL) < 0){
+		printf("driver_info call failed\n");
+		return -1;
+	}
+	pp = &Pktdrvr[i];
+	dosmem.size = 64*atoi(argv[3]); /* KB -> paragraphs */
+	if(_go32_dpmi_allocate_dos_memory(&dosmem)){
+		printf("DOS memory allocate failed, max size = %d\n",dosmem.size*16);
+		return -1;
+	}
+	pp->dossize = dosmem.size * 16;
+	pp->dosbase = dosmem.rm_segment * 16;
+	pp->overflows = pp->wptr = pp->rptr = pp->cnt = 0;
+
 	if_pk = (struct iface *)callocw(1,sizeof(struct iface));
 	if_pk->name = strdup(argv[2]);
 	if(argc > 5)
 		if_pk->addr = resolve(argv[5]);
 	else
 		if_pk->addr = Ip_addr;
-	pp = &Pktdrvr[i];
+
 	if_pk->mtu = atoi(argv[4]);
 	if_pk->dev = i;
 	if_pk->raw = pk_raw;
@@ -251,45 +308,26 @@ void *p
 	pp->intno = intno;
 	pp->iface = if_pk;
 
- 	/* Version 1.08 of the packet driver spec dropped the handle
- 	 * requirement from the driver_info call.  However, if we are using
- 	 * a version 1.05 packet driver, the following call will fail.
-  	 */
- 	if(driver_info(intno,-1,NULL,&class,&type,NULL,NULL) < 0){
-		/* Find out by exhaustive search what class this driver is (ugh) */
-		for(class=1;class<=NCLASS;class++){
-			/* Store handle in temp long so we can tell an
-			 * error return (-1) from a handle of 0xffff
-			 */
-			handle = access_type(intno,class,ANYTYPE,0,iptype,2,
-				Pkvec[if_pk->dev]);
-			if(handle != -1 || Derr == TYPE_INUSE){
-				pp->handle1 = handle;
-				break;
-			}
-		}
-		/* Now that we know, release it and do it all over again with the
-		 * right type fields
-		 */
-		release_type(intno,pp->handle1);
+	pp->rmcb_seginfo.pm_offset = (int)pkint;
+	if((i = _go32_dpmi_allocate_real_mode_callback_retf(&pp->rmcb_seginfo,
+	 &pp->rmcb_registers)) != 0){
+		printf("real mode callback alloc failed: %d\n",i);
+		return -1;
 	}
+	pp->handle = access_type(intno,class,ANYTYPE,0,pp->rmcb_seginfo.rm_segment,
+	  pp->rmcb_seginfo.rm_offset);
+
 	switch(class){
 	case CL_ETHERNET:
-		pp->handle1 = access_type(intno,class,ANYTYPE,0,iptype,2,
-			Pkvec[if_pk->dev]);
-		pp->handle2 = access_type(intno,class,ANYTYPE,0,arptype,2,
-			Pkvec[if_pk->dev]);
-		pp->handle3 = access_type(intno,class,ANYTYPE,0,revarptype,2,
-			Pkvec[if_pk->dev]);
 		setencap(if_pk,"Ethernet");
 
 		/**** temp set multicast flag ****/
-/*		i = set_rcv_mode(intno,pp->handle1,5);
+/*		i = set_rcv_mode(intno,pp->handle,5);
 		printf("set_rcv_mode returns %d, Derr = %d\n",i,Derr); */
 
 		/* Get hardware Ethernet address from driver */
 		if_pk->hwaddr = mallocw(EADDR_LEN);
-		get_address(intno,pp->handle1,if_pk->hwaddr,EADDR_LEN);
+		get_address(intno,pp->handle,if_pk->hwaddr,EADDR_LEN);
 		if(if_pk->hwaddr[0] & 1){
 			printf("Warning! Interface '%s' has a multicast address:",
 			 if_pk->name);
@@ -299,36 +337,26 @@ void *p
 		break;
 #ifdef	ARCNET
 	case CL_ARCNET:
-		pp->handle1 = access_type(intno,class,ANYTYPE,0,arcip,1,
-			Pkvec[if_pk->dev]);
-		pp->handle2 = access_type(intno,class,ANYTYPE,0,arcarp,1,
-			Pkvec[if_pk->dev]);
 		if_pk->output = anet_output;
 		/* Get hardware ARCnet address from driver */
 		if_pk->hwaddr = mallocw(AADDR_LEN);
-		get_address(intno,pp->handle1,if_pk->hwaddr,AADDR_LEN);
+		get_address(intno,pp->handle,if_pk->hwaddr,AADDR_LEN);
 		break;
 #endif
 	case CL_SERIAL_LINE:
-		pp->handle1 = access_type(intno,class,ANYTYPE,0,NULL,0,
-		 Pkvec[if_pk->dev]);
 		setencap(if_pk,"SLIP");
 		break;
 #ifdef	AX25
 	case CL_KISS:	/* Note that the raw routine puts on the command */
 	case CL_AX25:
-		pp->handle1 = access_type(intno,class,ANYTYPE,0,NULL,0,
-		 Pkvec[if_pk->dev]);
 		setencap(if_pk,"AX25");
 		if_pk->hwaddr = mallocw(AXALEN);
 		memcpy(if_pk->hwaddr,Mycall,AXALEN);
 		break;
 #endif
 	case CL_SLFP:
-		pp->handle1 = access_type(intno,class,ANYTYPE,0,NULL,0,
-		 Pkvec[if_pk->dev]);
 		setencap(if_pk,"SLFP");
-		get_address(intno,pp->handle1,(uint8 *)&if_pk->addr,4);
+		get_address(intno,pp->handle,(uint8 *)&if_pk->addr,4);
 		break;
 	default:
 		printf("Packet driver has unsupported class %u\n",class);
@@ -340,9 +368,14 @@ void *p
 	if_pk->next = Ifaces;
 	Ifaces = if_pk;
 	cp = if_name(if_pk," tx");
-	if_pk->txproc = newproc(cp,768,if_tx,if_pk->dev,if_pk,NULL,0);
+	if(strchr(argv[3],'s') == NULL)
+		if_pk->txproc = newproc(cp,768,if_tx,if_pk->dev,if_pk,NULL,0);
+	else
+		if_pk->txproc = newproc(cp,768,sim_tx,if_pk->dev,if_pk,NULL,0);
 	free(cp);
-
+	cp = if_name(if_pk," rx");
+	if_pk->rxproc = newproc(cp,768,pk_rx,if_pk->dev,if_pk,pp,0);
+	free(cp);
 	return 0;
 }
 static long
@@ -351,64 +384,39 @@ int intno,
 int if_class,
 int if_type,
 int if_number,
-uint8 *type,
-unsigned typelen,
-INTERRUPT (*receiver)()
+uint rm_segment,
+uint rm_offset
 ){
-	union REGS regs;
-	struct SREGS sregs;
+	_go32_dpmi_registers reg;
+	int i;
 
-	segread(&sregs);
-	regs.h.dl = if_number;		/* Number */
-	sregs.ds = FP_SEG(type);	/* Packet type template */
-	regs.x.si = FP_OFF(type);
-	regs.x.cx = typelen;		/* Length of type */
-	sregs.es = FP_SEG(receiver);	/* Address of receive handler */
-	regs.x.di = FP_OFF(receiver);
-	regs.x.bx = if_type;		/* Type */
-	regs.h.ah = ACCESS_TYPE;	/* Access_type() function */
-	regs.h.al = if_class;		/* Class */
-	int86x(intno,&regs,&regs,&sregs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
+	memset(&reg,0,sizeof(reg));
+	reg.h.ah = ACCESS_TYPE;	/* Access_type() function */
+	reg.h.al = if_class;	/* Class */
+	reg.x.bx = if_type;	/* Type */
+	reg.h.dl = if_number;	/* Number */
+	reg.x.es = rm_segment;	/* Address of rm receive handler */
+	reg.x.di = rm_offset;
+	_go32_dpmi_simulate_int(intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
 		return -1;
 	} else
-		return regs.x.ax;
+		return reg.x.ax;
 }
 static int
 release_type(
 int intno,
 int handle
 ){
-	union REGS regs;
+	_go32_dpmi_registers reg;
 
-	regs.x.bx = handle;
-	regs.h.ah = RELEASE_TYPE;
-	int86(intno,&regs,&regs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
-		return -1;
-	} else
-		return 0;
-}
-static int
-send_pkt(
-int intno,
-uint8 *buffer,
-unsigned length
-){
-	union REGS regs;
-	struct SREGS sregs;
-
-	segread(&sregs);
-	sregs.ds = FP_SEG(buffer);
-	sregs.es = FP_SEG(buffer); /* for buggy univation pkt driver - CDY */
-	regs.x.si = FP_OFF(buffer);
-	regs.x.cx = length;
-	regs.h.ah = SEND_PKT;
-	int86x(intno,&regs,&regs,&sregs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
+	memset(&reg,0,sizeof(reg));
+	reg.x.bx = handle;
+	reg.h.ah = RELEASE_TYPE;
+	_go32_dpmi_simulate_int(intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
 		return -1;
 	} else
 		return 0;
@@ -423,26 +431,27 @@ int *type,
 int *number,
 int *basic
 ){
-	union REGS regs;
+	_go32_dpmi_registers reg;
 
-	regs.x.bx = handle;
-	regs.h.ah = DRIVER_INFO;
-	regs.h.al = 0xff;
-	int86(intno,&regs,&regs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
+	memset(&reg,0,sizeof(reg));
+	reg.h.ah = DRIVER_INFO;
+	reg.x.bx = handle;
+	reg.h.al = 0xff;
+	_go32_dpmi_simulate_int(intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
 		return -1;
 	}
 	if(version != NULL)
-		*version = regs.x.bx;
+		*version = reg.x.bx;
 	if(class != NULL)
-		*class = regs.h.ch;
+		*class = reg.h.ch;
 	if(type != NULL)
-		*type = regs.x.dx;
+		*type = reg.x.dx;
 	if(number != NULL)
-		*number = regs.h.cl;
+		*number = reg.h.cl;
 	if(basic != NULL)
-		*basic = regs.h.al;
+		*basic = reg.h.al;
 	return 0;
 }
 static int
@@ -452,20 +461,20 @@ int handle,
 uint8 *buf,
 int len
 ){
-	union REGS regs;
-	struct SREGS sregs;
+	_go32_dpmi_registers reg;
 
-	segread(&sregs);
-	sregs.es = FP_SEG(buf);
-	regs.x.di = FP_OFF(buf);
-	regs.x.cx = len;
-	regs.x.bx = handle;
-	regs.h.ah = GET_ADDRESS;
-	int86x(intno,&regs,&regs,&sregs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
+	memset(&reg,0,sizeof(reg));
+	reg.h.ah = GET_ADDRESS;
+	reg.x.bx = handle;
+	reg.x.di = _go32_info_block.linear_address_of_transfer_buffer & 15;
+	reg.x.es = _go32_info_block.linear_address_of_transfer_buffer >> 4;
+	reg.x.cx = len;
+	_go32_dpmi_simulate_int(intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
 		return -1;
 	}
+	dosmemget(_go32_info_block.linear_address_of_transfer_buffer,len,buf);
 	return 0;
 }
 static int
@@ -474,18 +483,64 @@ int intno,
 int handle,
 int mode
 ){
-	union REGS regs;
-	struct SREGS sregs;
+	_go32_dpmi_registers reg;
 
-	segread(&sregs);
-	regs.x.cx = mode;
-	regs.x.bx = handle;
-	regs.h.ah = SET_RCV_MODE;
-	int86x(intno,&regs,&regs,&sregs);
-	if(regs.x.cflag){
-		Derr = regs.h.dh;
+	memset(&reg,0,sizeof(reg));
+	reg.h.ah = SET_RCV_MODE;
+	reg.x.cx = mode;
+	reg.x.bx = handle;
+	_go32_dpmi_simulate_int(intno,&reg);
+	if(reg.x.flags & C_FLAG){
+		Derr = reg.h.dh;
 		return -1;
 	}
 	return 0;
 }
 
+void
+pk_rx(int dev,void *p1,void *p2)
+{
+	struct iface *iface = (struct iface *)p1;
+	struct pktdrvr *pp = (struct pktdrvr *)p2;
+	uint len,blen;	/* len type must match size field in pkint */
+	struct mbuf *bp;
+	int i,cadj;
+
+loop:	while(disable(),i=(volatile)pp->cnt,enable(),i == 0)
+		kwait(&pp->cnt);
+
+	cadj = 0;
+	/* Extract size */
+	dosmemget(pp->dosbase+pp->rptr,sizeof(len),&len);
+	if(len == 0){
+		/* Writer wrapped around */
+		cadj += pp->dossize - pp->rptr;
+		pp->rptr = 0;
+		dosmemget(pp->dosbase,sizeof(len),&len);
+	}
+	/* Copy the packet into an mbuf and queue for the router */
+	bp = ambufw(len+sizeof(struct iface *));
+	bp->data += sizeof(struct iface *);
+#ifdef	debug
+	printf("overf %d cnt %d start %d len %d\n",pp->overflows,
+		pp->cnt,pp->rptr+sizeof(len),len);
+#endif
+	dosmemget(pp->dosbase+pp->rptr+sizeof(len),len,bp->data);
+	bp->cnt = len;
+	net_route(iface,&bp);
+
+	/* figure length rounded up to next boundary */
+	blen = sizeof(len) + (len + sizeof(len) - 1) & ~(sizeof(len)-1);
+
+	cadj += blen;
+	pp->rptr += blen;
+	if(pp->rptr + sizeof(len) > pp->dossize){
+		cadj += pp->dossize - pp->rptr;
+		pp->rptr = 0;
+	}
+	disable();
+	pp->cnt -= cadj;
+	enable();
+
+	goto loop;
+}

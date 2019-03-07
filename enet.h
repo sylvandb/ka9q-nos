@@ -19,7 +19,7 @@
 struct ether {
 	uint8 dest[EADDR_LEN];
 	uint8 source[EADDR_LEN];
-	uint16 type;
+	uint type;
 };
 #define	ETHERLEN	14
 
@@ -40,7 +40,7 @@ extern uint8 Ether_bdcst[];
 char *pether(char *out,uint8 *addr);
 int gether(uint8 *out,char *cp);
 int enet_send(struct mbuf **bpp,struct iface *iface,int32 gateway,uint8 tos);
-int enet_output(struct iface *iface,uint8 dest[],uint8 source[],uint16 type,
+int enet_output(struct iface *iface,uint8 dest[],uint8 source[],uint type,
 	struct mbuf **bpp);
 void eproc(struct iface *iface,struct mbuf **bpp);
 

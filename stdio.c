@@ -16,17 +16,16 @@
 #include "usock.h"
 #include "socket.h"
 #include "display.h"
+#include "sb.h"
 #include "asy.h"
 
-#define	_CREAT(a,b)	_creat((a),(b))
+#define	_CREAT(a,b)	creat((a),(b))
 #define _OPEN(a,b)	_open((a),(b))
 #define	_CLOSE(a)	_close((a))
 #define	_READ(a,b,c)	_read((a),(b),(c))
 #define	_WRITE(a,b,c)	_write((a),(b),(c))
-#define	_LSEEK(a,b,c)	_lseek((a),(b),(c))
+#define	_LSEEK(a,b,c)	lseek((a),(b),(c))
 #define	_DUP(a)		dup((a))
-
-long _lseek(int fd,long offset,int whence);
 
 static void _fclose(FILE *fp);
 static struct mbuf *_fillbuf(FILE *fp,int cnt);
@@ -35,6 +34,9 @@ static FILE *_fcreat(void);
 FILE *_Files;
 int _clrtmp = 1;
 extern unsigned *Refcnt;
+
+/* Defined in format.c */
+int _format(void putter(char,void *),void *,const char *,va_list);
 
 /* Open a file and associate it with a (possibly specified) stream */
 FILE *
@@ -214,7 +216,23 @@ int sfsize
 	strcpy(fp->eol,"\r\n");
 	return fp;
 }
+/* Open the sound card driver on a stream */
+FILE *
+soundopen()
+{
+	FILE *fp;
 
+	if((fp = _fcreat()) == NULL)
+		return NULL;
+
+	fp->fd = -1;
+	fp->type = _FL_SOUND;
+	fp->bufmode = _IOFBF;
+	fp->flags.ascii = 0;
+
+	fp->bufsize = BUFSIZ;
+	return fp;
+}
 
 /* Read string from stdin into buf until newline, which is not retained */
 char *
@@ -266,7 +284,7 @@ FILE *fp	/* Input stream */
 
 /* Do printf on a stream */
 int
-fprintf(FILE *fp,char *fmt,...)
+fprintf(FILE *fp,const char *fmt,...)
 {
 	va_list args;
 	int len;
@@ -278,7 +296,7 @@ fprintf(FILE *fp,char *fmt,...)
 }
 /* Printf on standard output stream */
 int
-printf(char *fmt,...)
+printf(const char *fmt,...)
 {
 	va_list args;
 	int len;
@@ -288,50 +306,56 @@ printf(char *fmt,...)
 	va_end(args);
 	return len;
 }
-/* The guts of printf, uses variable arg version of sprintf */
+/* variable arg version of printf */
 int
-vprintf(char *fmt, va_list args)
+vprintf(const char *fmt, va_list args)
 {
 	return vfprintf(stdout,fmt,args);
 }
 
-/* There's a more efficient version of vfprintf() in vfprintf.c
- * that avoids the malloc(BUFSIZ) call by calling the internal 
- * Borland __vprinter() function directly.
- */
-#ifndef	__TURBOC__
-/* The guts of printf, uses variable arg version of sprintf */
-int
-vfprintf(FILE *fp,char *fmt, va_list args)
+static void
+putter(char c,void *p)
 {
-	int len,cnt,withargs;
-	char *buf;
+	fputc(c,(FILE *)p);
+}
 
+int
+vfprintf(FILE *fp,const char *fmt, va_list args)
+{
 	if(fp == NULL || fp->cookie != _COOKIE)
 		return -1;
-	if(strchr(fmt,'%') == NULL){
-		/* Common case optimization: no args, so we don't
-		 * need vsprintf()
-		 */
-		withargs = 0;
-		buf = fmt;
-	} else {
-		/* Use a default value that is hopefully longer than the
-		 * biggest output string we'll ever print (!)
-		 */
-		withargs = 1;
-		buf = mallocw(BUFSIZ);
-		vsprintf(buf,fmt,args);
-	}
-	len = strlen(buf);
-	cnt = fwrite(buf,1,len,fp);
-	if(cnt != len)
-		cnt = -1;
-	if(withargs)
-		free(buf);
-	return cnt;
+	return _format(putter,(void *)fp,fmt, args);
 }
-#endif	/* __TURBOC__ */
+
+static void
+sputter(char c,void *p)
+{
+	char **cpp;
+
+	cpp = (char **)p;
+	*(*cpp)++ = c;
+}
+
+int
+vsprintf(char *s,const char *fmt,va_list args)
+{
+	int r;
+	r = _format(sputter,(void *)&s,fmt,args);
+	*s = '\0';
+	return r;
+}
+int
+sprintf(char *s,const char *fmt,...)
+{
+	va_list args;
+	int len;
+
+	va_start(args,fmt);
+	len = vsprintf(s,fmt,args);
+	va_end(args);
+	return len;
+}
+
 /* put a char to a stream */ 
 int
 fputc(int c,FILE *fp)
@@ -379,6 +403,22 @@ fputs(char *buf,FILE *fp)
 		return EOF;
 	return buf[len-1];
 }
+/* put a short to a stream in native order */
+int
+putshort(short c,FILE *fp)
+{
+	return fwrite(&c,2,1,fp);
+}
+/* Get a short from a stream in native order */
+int
+getshort(FILE *fp)
+{
+	unsigned short c;
+
+	if(fread(&c,2,1,fp) == 0)
+		return -1;
+	return c;
+}
 
 /* Put a string to standard output */
 int
@@ -388,6 +428,16 @@ puts(char *s)
 		return EOF;
 	putchar('\n');
 	return 1;
+}
+
+/* Return a conservative estimate of the bytes ready to be read */
+int
+frrdy(FILE *fp)
+{
+	/* Just return the bytes on the stdio input buffer */
+	if(fp->ibuf != NULL)
+		return len_p(fp->ibuf);
+	return 0;
 }
 
 /* Read a character from the stream */
@@ -442,22 +492,16 @@ fflush(FILE *fp)
 	struct mbuf *bp;
 	int cnt;
 
-	if(fp == NULL || fp->cookie != _COOKIE){
-		flushall();
+	if(fp == NULL || fp->cookie != _COOKIE || fp->obuf == NULL)
 		return 0;
-	}
-	if(fp->obuf == NULL)
-		return 0;	/* Nothing to do */
 
 	bp = fp->obuf;
 	fp->obuf = NULL;
 	switch(fp->type){
+	case _FL_SOUND:
+		return sb_send(&bp);
 	case _FL_ASY:
-		while(bp != NULL){
-			asy_write(fp->fd,bp->data,bp->cnt);
-			bp = free_mbuf(&bp);
-		}
-		return 0;		
+		return asy_send(fp->fd,&bp);
 	case _FL_PIPE:
 		append(&fp->ibuf,&bp);
 		ksignal(&fp->ibuf,1);
@@ -480,13 +524,13 @@ fflush(FILE *fp)
 				free_p(&bp);
 				return EOF;
 			}
-			bp = free_mbuf(&bp);
+			free_mbuf(&bp);
 		} while(bp != NULL);
 		return 0;
 	case _FL_DISPLAY:
 		do {
 			displaywrite(fp->ptr,bp->data,bp->cnt);
-			bp = free_mbuf(&bp);
+			free_mbuf(&bp);
 		} while(bp != NULL);
 		return 0;
 	}
@@ -722,6 +766,9 @@ _fillbuf(FILE *fp,int cnt)
 		return fp->ibuf;	/* Stuff already in the input buffer */
 
 	switch(fp->type){
+	case _FL_SOUND:
+		fp->ibuf = sb_recv();
+		return fp->ibuf;
 	case _FL_ASY:
 		fp->ibuf = ambufw(BUFSIZ);
 		i = asy_read(fp->fd,fp->ibuf->data,BUFSIZ);
@@ -975,9 +1022,7 @@ _fclose(FILE *fp)
 		break;
 	}
 	free_p(&fp->obuf);	/* Should be NULL anyway */
-	fp->obuf = NULL;
 	free_p(&fp->ibuf);
-	fp->ibuf = NULL;
 	if(fp->flags.tmp)
 		unlink(fp->ptr);
 	free(fp->ptr);
@@ -1051,7 +1096,7 @@ write(int fd,const void *buf,unsigned cnt)
  * directly, instead of using fopen()
  */
 int
-open(const char *file,int mode)
+open(const char *file,int mode,...)
 {
 	return _open(file,mode);
 }
@@ -1138,12 +1183,6 @@ fpname(FILE *fp)
 	return NULL;
 }
 
-void
-exit(int n)
-{
-	fcloseall();
-	_exit(n);
-}
 
 int
 dofiles(int argc,char *argv[],void *p)
@@ -1151,19 +1190,19 @@ dofiles(int argc,char *argv[],void *p)
 	FILE *fp;
 	int i;
 
-	printf("fp       fd   ref  eol   type mod buf  flags\n");
+	printf("       fp   fd   ref      eol   type mod buf  flags\n");
 	for(fp = _Files;fp != NULL;fp = fp->next){
-		printf("%p ",fp);
+		printf("%9p ",fp);
 		if(fp->fd != -1)
-			printf("%-4d",fp->fd);
+			printf("%4d",fp->fd);
 		else
 			printf("    ");
-		printf(" %-3d ",fp->refcnt);
+		printf("%6d ",fp->refcnt);
 		for(i=0;i<EOL_LEN-1;i++){
 			if(fp->eol[i] != '\0')
-				printf(" %02x",fp->eol[i]);
+				printf("   %02x",fp->eol[i]);
 			else
-				printf("   ");
+				printf("     ");
 		}
 		switch(fp->type){
 		case _FL_SOCK:

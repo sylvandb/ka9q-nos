@@ -11,10 +11,9 @@
 
 /* Timer timeout */
 void
-tcp_timeout(p)
-void *p;
+tcp_timeout(void *p)
 {
-	register struct tcb *tcb;
+	struct tcb *tcb;
 	int32 ptrsave;
 
 	tcb = p;
@@ -46,8 +45,7 @@ void *p;
 }
 /* Backoff function - the subject of much research */
 int32
-backoff(n)
-int n;
+backoff(int n)
 {
 	if(n > 31)
 		n = 31;	/* Prevent truncation to zero */

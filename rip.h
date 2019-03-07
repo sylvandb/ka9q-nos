@@ -70,7 +70,7 @@ struct rip_list {
 
 /* Host format of a single entry in a RIP response packet */	
 struct rip_route {
-	uint16	addr_fam;
+	uint	addr_fam;
 	int32	target;
 	int32	metric;
 };
@@ -104,13 +104,13 @@ void rip_trigger(void);
 int rip_add(int32 dest,int32 interval,int split,int us);
 int riprefadd(int32 gateway);
 int riprefdrop(int32 gateway);
-int ripreq(int32 dest,uint16 replyport);
+int ripreq(int32 dest,uint replyport);
 int rip_drop(int32 dest);
 int nbits(int32 target);
 void pullentry(struct rip_route *ep,struct mbuf **bpp);
 
 /* RIP Definition */
-extern uint16 Rip_trace;
+extern uint Rip_trace;
 extern int Rip_merge;
 extern struct rip_stat Rip_stat;
 extern struct rip_list *Rip_list;

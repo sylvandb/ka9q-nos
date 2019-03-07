@@ -14,7 +14,7 @@
 
 int
 ntohnr3(hdr,bpp)
-register struct nr3hdr *hdr;	/* output structure */
+struct nr3hdr *hdr;	/* output structure */
 struct mbuf **bpp;
 {
 	int ttl;
@@ -39,10 +39,10 @@ struct mbuf **bpp;
 
 struct mbuf *
 htonnr3(hdr)
-register struct nr3hdr *hdr;
+struct nr3hdr *hdr;
 {
 	struct mbuf *rbuf;
-	register uint8 *cp;
+	uint8 *cp;
 
 	if(hdr == (struct nr3hdr *) NULL)
 		return NULL;
@@ -73,7 +73,7 @@ register struct nr3hdr *hdr;
  */
 int
 ntohnrdest(ds,bpp)
-register struct nr3dest *ds;
+struct nr3dest *ds;
 struct mbuf **bpp;
 {
 	int quality;
@@ -105,10 +105,10 @@ struct mbuf **bpp;
  */
 struct mbuf *
 htonnrdest(ds)
-register struct nr3dest *ds;
+struct nr3dest *ds;
 {
 	struct mbuf *rbuf;
-	register uint8 *cp;
+	uint8 *cp;
 
 	if(ds == (struct nr3dest *) NULL)
 		return NULL;

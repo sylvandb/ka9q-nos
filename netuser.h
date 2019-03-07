@@ -30,10 +30,12 @@ extern char Inet_eol[];
 /* Local IP wildcard address */
 #define	INADDR_ANY	0x0L
 
+#define	NET_HDR_PAD	70	/* mbuf size to preallocate for headers */
+
 /* Socket structure */
 struct socket {
 	int32 address;		/* IP address */
-	uint16 port;		/* port number */
+	uint port;		/* port number */
 };
 
 /* Connection structure (two sockets) */

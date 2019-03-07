@@ -87,14 +87,14 @@ extern struct session *Command;		/* Pointer to command session */
 extern char *Cmdline;			/* Last typed command line */
 
 /* In session.c: */
-void freesession(struct session *sp);
+void freesession(struct session **spp);
 int keywait(char *prompt,int flush);
 struct session *sessptr(char *cp);
 struct session *newsession(char *name,int type,int makecur);
 void sesflush(void);
 void upload(int unused,void *sp1,void *p);
 
-extern uint16 Lport;
+extern uint Lport;
 #define	ALERT_EOF	1
 
 #endif  /* _SESSION_H */

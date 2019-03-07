@@ -10,9 +10,7 @@ char Whitespace[] = " \t\r\n";
 
 /* Select from an array of strings, or return ascii number if out of range */
 char *
-smsg(msgs,nmsgs,n)
-char *msgs[];
-unsigned nmsgs,n;
+smsg(char *msgs[],unsigned nmsgs,unsigned n)
 {
 	static char buf[16];
 
@@ -24,8 +22,7 @@ unsigned nmsgs,n;
 
 /* Convert hex-ascii to integer */
 int
-htoi(s)
-char *s;
+htoi(char *s)
 {
 	int i = 0;
 	char c;
@@ -46,8 +43,7 @@ char *s;
 }
 /* Convert single hex-ascii character to binary */
 int
-htob(c)
-char c;
+htob(char c)
 {
 	if('0' <= c && c <= '9')
 		return c - '0';
@@ -62,10 +58,7 @@ char c;
  * output buffer. Return number of bytes converted
  */
 int
-readhex(out,in,size)
-uint8 *out;
-char *in;
-int size;
+readhex(uint8 *out,char *in,int size)
 {
 	int c,count;
 
@@ -87,10 +80,9 @@ int size;
 }
 /* replace terminating end of line marker(s) with null */
 void
-rip(s)
-register char *s;
+rip(char *s)
 {
-	register char *cp;
+	char *cp;
 
 	if((cp = strchr(s,'\n')) != NULL)
 		*cp = '\0';
@@ -99,10 +91,7 @@ register char *s;
 }
 /* Count the occurrances of 'c' in a buffer */
 int
-memcnt(buf,c,size)
-uint8 *buf;
-uint8 c;
-int size;
+memcnt(const uint8 *buf,uint8 c,int size)
 {
 	int cnt = 0;
 	uint8 *icp;
@@ -115,7 +104,7 @@ int size;
 		/* Advance the start of the next search to right after
 		 * this character
 		 */
-		change = (int) (icp - buf + 1);
+		change = (int) (icp - (uint8 *)buf + 1);
 		buf += change;
 		size -= change;
 		cnt++;
@@ -124,9 +113,7 @@ int size;
 }
 /* XOR block 'b' into block 'a' */
 void
-memxor(a,b,n)
-uint8 *a,*b;
-unsigned int n;
+memxor(uint8 *a,uint8 *b,unsigned int n)
 {
 	while(n-- != 0)
 		*a++ ^= *b++;
@@ -137,11 +124,10 @@ unsigned int n;
  * NOS uses of strdup() generally don't check for NULL, so they need this one.
  */
 char *
-strdup(s)
-const char *s;
+strdup(const char *s)
 {
-	register char *out;
-	register int len;
+	char *out;
+	int len;
 
 	if(s == NULL)
 		return NULL;
@@ -156,9 +142,7 @@ const char *s;
 #ifdef	AZTEC
 
 /* Case-insensitive string comparison */
-strnicmp(a,b,n)
-register char *a,*b;
-register int n;
+strnicmp(char *a,char *b,int n)
 {
 	char a1,b1;
 
@@ -178,17 +162,13 @@ register int n;
 }
 
 char *
-strtok(s1,s2)
-char *s1;	/* Source string (first call) or NULL */
-#ifdef	__STDC__	/* Ugly kludge for aztec's declaration */
-const char *s2;	/* Delimiter string */
-#else
-char *s2;	/* Delimiter string */
-#endif
-{
+strtok(
+char *s1,	/* Source string (first call) or NULL */
+const char *s2,	/* Delimiter string */
+){
 	static int isdelim();
 	static char *next;
-	register char *cp;
+	char *cp;
 	char *tmp;
 
 	if(s2 == NULL)
@@ -220,9 +200,7 @@ char *s2;	/* Delimiter string */
 	return tmp;
 }
 static int
-isdelim(c,delim)
-char c;
-register char *delim;
+isdelim(char c,char *delim)
 {
 	char d;
 
@@ -239,12 +217,10 @@ register char *delim;
 /* Host-network conversion routines, replaced on the x86 with
  * assembler code in pcgen.asm
  */
-#ifndef	MSDOS
+
 /* Put a long in host order into a char array in network order */
 uint8 *
-put32(cp,x)
-register uint8 *cp;
-int32 x;
+put32(uint8 *cp,int32 x)
 {
 	*cp++ = x >> 24;
 	*cp++ = x >> 16;
@@ -254,30 +230,24 @@ int32 x;
 }
 /* Put a short in host order into a char array in network order */
 uint8 *
-put16(cp,x)
-register uint8 *cp;
-uint16 x;
+put16(uint8 *cp,uint x)
 {
 	*cp++ = x >> 8;
 	*cp++ = x;
 
 	return cp;
 }
-uint16
-get16(cp)
-register uint8 *cp;
+uint
+get16(uint8 *cp)
 {
-	register uint16 x;
+	uint x;
 
 	x = *cp++;
-	x <<= 8;
-	x |= *cp;
-	return x;
+	return (x << 8) | *cp;
 }
 /* Machine-independent, alignment insensitive network-to-host long conversion */
 int32
-get32(cp)
-register uint8 *cp;
+get32(uint8 *cp)
 {
 	int32 rval;
 
@@ -293,10 +263,9 @@ register uint8 *cp;
 }
 /* Compute int(log2(x)) */
 int
-ilog2(x)
-register uint16 x;
+ilog2(uint x)
 {
-	register int n = 16;
+	int n = 16;
 	for(;n != 0;n--){
 		if(x & 0x8000)
 			break;
@@ -305,6 +274,4 @@ register uint16 x;
 	n--;
 	return n;
 }
-
-#endif
 

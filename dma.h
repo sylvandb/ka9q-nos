@@ -1,10 +1,12 @@
-int setup_dma(int chan, int32 physaddr, uint16 length,int mode);
-uint16 dma_cnt(int chan);
+int setup_dma(int chan, int32 physaddr, uint length,int mode);
+uint dma_cnt(int chan);
 int dma_disable(int chan);
 int dma_enable(int chan);
-void *dma_malloc(int32 *,unsigned short);
+int32 dma_malloc(int *,unsigned,int);
+void dma_free(void *,int);
 int dis_dmaxl(int);
 int ena_dmaxl(int);
+
 
 #define	DMA1BASE	0	/* Base address of 1st (8-bit) DMA controller */
 #define	DMA2BASE	0xc0	/* Base address of 2nd (16-bit) DMA controller */

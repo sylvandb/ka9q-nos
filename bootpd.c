@@ -471,7 +471,7 @@ struct iface *iface;
 {
 	struct mbuf *buf;
 	int32 faddr;
-	uint16 length;
+	uint length;
 	uint8 *cp;
 
 	/*
@@ -484,7 +484,7 @@ struct iface *iface;
 		faddr = get32 ((uint8 *) &(bp->ciaddr));
 	} else {
 		faddr = get32 ((uint8 *) &(bp->yiaddr));
-		arp_add (faddr, (uint16) bp->htype, bp->chaddr, 0);
+		arp_add (faddr, bp->htype, bp->chaddr, 0);
 	}
 
 	if((buf = qdata (bp, sizeof (struct bootp))) == NULL)

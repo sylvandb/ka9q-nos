@@ -6,6 +6,7 @@
  *	Sep '91 Bill Simpson
  *		minor changes for DTR & RLSD
  */
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "timer.h"
@@ -210,8 +211,7 @@ void *p;
 			ifp->lastsent = secclock();
 		}
 		fclose(tip->network);
-		killproc(tip->in);
-		tip->in = NULL;
+		killproc(&tip->in);
 		kwait(itop(s[1])); /* let mailbox terminate, if necessary */
 		stop_timer(&tip->timer);
 
@@ -247,9 +247,9 @@ void *p;
 			ifp->raw = tip->rawsave;
 			resume(ifp->rxproc);
 			stop_timer(&tip->timer);
-			killproc(tip->in);
+			killproc(&tip->in);
 			free(tip);
-			killproc(proc);
+			killproc(&proc);
 			return 0;
 		}
 	return 0;

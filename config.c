@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <dos.h>
+#include <time.h>
 #include "global.h"
 #include "config.h"
 #include "mbuf.h"
@@ -51,17 +52,6 @@
 #include "asy.h"
 #include "trace.h"
 #include "session.h"
-#ifdef	QTSO
-#include "qtso.h"
-#endif
-#ifdef	CDMA_DM
-#include "dm.h"
-#include "rlp.h"
-#endif
-#ifdef	DMLITE
-#include "dmlite.h"
-#include "rlp.h"
-#endif
 #ifdef	SPPP
 #include "sppp.h"
 #endif
@@ -73,7 +63,6 @@
 #include "sb.h"
 #endif
 
-int dotest(int argc,char *argv[],void *p);	/**/
 static int dostart(int argc,char *argv[],void *p);
 static int dostop(int argc,char *argv[],void *p);
 
@@ -103,14 +92,8 @@ long Sfsize = 1000;	/* Default size of session scrollback file */
 struct cmds Cmds[] = {
 	/* The "go" command must be first */
 	"",		go,		0, 0, NULL,
-#ifndef	AMIGA
-	"!",		doshell,	0, 0, NULL,
-#endif
-#ifdef	AMIGA
-	"amiga",	doamiga,	0, 0, NULL,
-#endif
 #if	(defined(MAC) && defined(APPLETALK))
-	"applestat",	doatstat,	0,	0, NULL,
+	"applestat",	doatstat,	0, 0, NULL,
 #endif
 #if	(defined(AX25) || defined(ETHER) || defined(APPLETALK))
 	"arp",		doarp,		0, 0, NULL,
@@ -138,7 +121,7 @@ struct cmds Cmds[] = {
 	"close",	doclose,	0, 0, NULL,
 /* This one is out of alpabetical order to allow abbreviation to "d" */
 	"disconnect",	doclose,	0, 0, NULL,
-	"delete",	dodelete,	0, 2, "delete <file>",
+	"delete",	dodelete,	0, 2, "delete <file>", 
 	"detach",	dodetach,	0, 2, "detach <interface>",
 	"debug",	dodebug,	0, 1, "debug [on|off]",
 #ifdef	DIALER
@@ -147,12 +130,6 @@ struct cmds Cmds[] = {
 #endif
 #ifndef	AMIGA
 	"dir",		dodir,		0, 0, NULL, /* note sequence */
-#endif
-#ifdef	CDMA_DM
-	"dm",		dodm,		0, 0, NULL,
-#endif
-#ifdef	DMLITE
-	"dmlite",	dodml,		0, 0, NULL,
 #endif
 	"domain",	dodomain,	0, 0, NULL,
 #ifdef	DRSI
@@ -167,9 +144,6 @@ struct cmds Cmds[] = {
 	"escape",	doescape,	0, 0, NULL,
 #endif
 	"exit",		doexit,		0, 0, NULL,
-#ifdef	QFAX
-	"fax",		dofax,		4096, 2, "fax <server>",
-#endif	
 	"files",	dofiles,	0, 0, NULL,
 	"finger",	dofinger,	1024, 2, "finger name@host",
 	"ftp",		doftp,		2048, 2, "ftp <address>",
@@ -187,9 +161,6 @@ struct cmds Cmds[] = {
 	"icmp",		doicmp,		0, 0, NULL,
 	"ifconfig",	doifconfig,	0, 0, NULL,
 	"ip",		doip,		0, 0, NULL,
-#if defined(MSDOS) && !defined(CPU386)
-	"isat",		doisat,		0, 0, NULL,
-#endif
 	"kick",		dokick,		0, 0, NULL,
 #ifdef	KSP
 	"ksp",		doksp,		0, 0, NULL,
@@ -232,14 +203,11 @@ struct cmds Cmds[] = {
 #if	!defined(UNIX) && !defined(AMIGA)
 	"pwd",		docd,		0, 0, NULL,
 #endif
-#ifdef	QTSO
-	"qtso",		doqtso,		0, 0, NULL,
-#endif
 	"record",	dorecord,	0, 0, NULL,
-	"remote",	doremote,	0, 3, "remote [-p port] [-k key] [-a kickaddr] <address> exit|reset|kick",
 	"rename",	dorename,	0, 3, "rename <oldfile> <newfile>",
 	"repeat",	dorepeat,	1024, 3, "repeat <interval> <command> [args...]",
 	"reset",	doreset,	0, 0, NULL,
+	"reboot",	doreboot,	0, 0, NULL,
 #ifdef	RIP
 	"rip",		dorip,		0, 0, NULL,
 #endif
@@ -253,9 +221,7 @@ struct cmds Cmds[] = {
 #ifdef	SCC
 	"sccstat",	dosccstat,	0, 0, NULL,
 #endif
-#if	!defined(AMIGA)
-	"shell",	doshell,	0, 0, NULL,
-#endif
+	"sim",		dosim,		0, 0, NULL,
 #if	defined(SMTP)
 	"smtp",		dosmtp,		0, 0, NULL,
 #endif
@@ -263,6 +229,7 @@ struct cmds Cmds[] = {
 #ifdef	SOUND
 	"sound",	dosound,	0, 2,
 		"sound attach|detach|listen ...",
+
 #endif
 #ifdef	SERVERS
 	"start",	dostart,	0, 2, "start <servername>",
@@ -270,7 +237,7 @@ struct cmds Cmds[] = {
 #endif
 	"tcp",		dotcp,		0, 0, NULL,
 	"telnet",	dotelnet,	1024, 2, "telnet <address>",
-#ifndef	notdef
+#ifdef	notdef
 	"test",		dotest,		1024, 0, NULL,
 #endif
 	"tip",		dotip,		256, 2, "tip <iface>",
@@ -281,11 +248,128 @@ struct cmds Cmds[] = {
 	"udp",		doudp,		0, 0, NULL,
 	"upload",	doupload,	0, 0, NULL,
 	"view",		doview,		0, 2, "view <filename>",
-#ifdef	MSDOS
-	"watch",	doswatch,	0, 0, NULL,
-#endif
 	"wipe",		dowipe,		0, 0, NULL,
 	"?",		dohelp,		0, 0, NULL,
+	NULL,	NULL,		0, 0,
+		"Unknown command; type \"?\" for list",
+};
+/* Remote command lookup and branch tables */
+struct cmds Remcmds[] = {
+	"",		donothing,	0, 0, NULL,
+#if	(defined(MAC) && defined(APPLETALK))
+	"applestat",	doatstat,	0, 0, NULL,
+#endif
+#if	(defined(AX25) || defined(ETHER) || defined(APPLETALK))
+	"arp",		doarp,		0, 0, NULL,
+#endif
+#ifdef	ASY
+	"asystat",	doasystat,	0, 0, NULL,
+#endif
+	"attach",	doattach,	0, 2,
+		"attach <hardware> <hw specific options>",
+#ifdef	AX25
+	"ax25",		doax25,		0, 0, NULL,
+#endif
+#ifdef	BOOTP
+	"bootp",	dobootp,	0, 0, NULL,
+	"bootpd",	bootpdcmd,	0, 0, NULL,
+#endif
+#if	!defined(UNIX) && !defined(AMIGA)
+	"cd",		docd,		0, 0, NULL,
+#endif
+	"delete",	dodelete,	0, 2, "delete <file>", 
+	"detach",	dodetach,	0, 2, "detach <interface>",
+#ifdef	DIALER
+	"dialer",	dodialer,	0, 2,
+		 "dialer <iface> <timeout> [device-dependent args]",
+#endif
+#ifdef	notdef	/* hangs system - must fix this */
+#ifndef	AMIGA
+	"dir",		dodir,		0, 0, NULL, /* note sequence */
+#endif
+#endif
+	"domain",	dodomain,	0, 0, NULL,
+#ifdef	DRSI
+	"drsistat",	dodrstat,	0, 0, NULL,
+#endif
+#ifdef	EAGLE
+	"eaglestat",	doegstat,	0, 0, NULL,
+#endif
+	"files",	dofiles,	0, 0, NULL,
+#ifdef HAPN
+	"hapnstat",	dohapnstat,	0, 0, NULL,
+#endif
+	"help",		dorhelp,	0, 0, NULL,
+	"hostname",	dohostname,	0, 0, NULL,
+#ifdef	HS
+	"hs",		dohs,		0, 0, NULL,
+#endif
+	"icmp",		doicmp,		0, 0, NULL,
+	"ifconfig",	doifconfig,	0, 0, NULL,
+	"ip",		doip,		0, 0, NULL,
+	"kick",		dokick,		0, 0, NULL,
+#ifdef	KSP
+	"ksp",		doksp,		0, 0, NULL,
+#endif
+	"log",		dolog,		0, 0, NULL,
+#ifndef	UNIX
+	"memory",	domem,		0, 0, NULL,
+#endif
+	"mkdir",	domkd,		0, 2, "mkdir <directory>",
+#ifdef	NETROM
+	"netrom",	donetrom,	0, 0, NULL,
+#endif	/* NETROM */
+#ifdef	NNTP
+	"nntp",		donntp,		0, 0, NULL,
+#endif	/* NNTP */
+#ifdef	NRS
+	"nrstat",	donrstat,	0, 0, NULL,
+#endif	/* NRS */
+	"param",	doparam,	0, 2, "param <interface>",
+#ifdef	PI
+	"pistatus",	dopistat,	0, 0, NULL,
+#endif
+#ifdef POP
+	"pop",		dopop,		0, 0, NULL,
+#endif
+#ifdef PPP
+	"ppp",		doppp_commands,	0, 0, NULL,
+#endif
+	"ps",		ps,		0, 0, NULL,
+#if	!defined(UNIX) && !defined(AMIGA)
+	"pwd",		docd,		0, 0, NULL,
+#endif
+	"rename",	dorename,	0, 3, "rename <oldfile> <newfile>",
+	"reset",	doreset,	0, 0, NULL,
+	"reboot",	doreboot,	0, 0, NULL,
+#ifdef	RIP
+	"rip",		dorip,		0, 0, NULL,
+#endif
+	"rmdir",	dormd,		0, 2, "rmdir <directory>",
+	"route",	doroute,	0, 0, NULL,
+#ifdef	IPSEC
+	"secure",	dosec,		0, 0, "secure [[add|delete] <host>]",
+#endif
+#ifdef	SCC
+	"sccstat",	dosccstat,	0, 0, NULL,
+#endif
+#if	defined(SMTP)
+	"smtp",		dosmtp,		0, 0, NULL,
+#endif
+	"socket",	dosock,		0, 0, NULL,
+#ifdef	SOUND
+	"sound",	dosound,	0, 2,
+		"sound attach|detach|listen ...",
+
+#endif
+#ifdef	SERVERS
+	"start",	dostart,	0, 2, "start <servername>",
+	"stop",		dostop,		0, 2, "stop <servername>",
+#endif
+	"tcp",		dotcp,		0, 0, NULL,
+	"udp",		doudp,		0, 0, NULL,
+	"wipe",		dowipe,		0, 0, NULL,
+	"?",		dorhelp,	0, 0, NULL,
 	NULL,	NULL,		0, 0,
 		"Unknown command; type \"?\" for list",
 };
@@ -306,10 +390,6 @@ struct cmds Attab[] = {
 	"pc100", pc_attach, 0, 8,
 	"attach pc100 <address> <vector> ax25ui|ax25i <label> <buffers>\
  <mtu> <speed> [ip_addra] [ip_addrb]",
-#endif
-#ifdef	CDMA_DM
-	"dm", dm_attach, 0, 8,
-	"attach dm <address> <vector> <rxdrq> <txdrq> <label> <rxbuf> <mtu> <speed>",
 #endif
 #ifdef	DRSI
 	/* DRSI PCPA card in low speed mode */
@@ -350,12 +430,6 @@ struct cmds Attab[] = {
 	"packet", pk_attach, 0, 4,
 	"attach packet <int#> <label> <buffers> <mtu> [ip_addr]",
 #endif
-#ifdef	QTSO
-	/* CDMA QTSO data interface */
-	"qtso",	qtso_attach, 0, 2,
-	"attach qtso <label> <com_port_label> [<com_port_label> ...]",
-#endif
-
 #ifdef	HS
 	/* Special high speed driver for DRSI PCPA or Eagle cards */
 	"hs", hs_attach, 0, 7,
@@ -385,12 +459,8 @@ static struct cmds Startcmds[] = {
 #if	defined(AX25) && defined(MAILBOX)
 	"ax25",		ax25start,	256, 0, NULL,
 #endif
-	"bsr",		bsr1,		256, 2, "start bsr <interface> [<port>]",
 	"discard",	dis1,		256, 0, NULL,
 	"echo",		echo1,		256, 0, NULL,
-#ifdef	QFAX
-	"fax",		fax1,		256, 0, NULL,
-#endif
 	"finger",	finstart,	256, 0, NULL,
 	"ftp",		ftpstart,	256, 0, NULL,
 #if	defined(NETROM) && defined(MAILBOX)
@@ -409,9 +479,8 @@ static struct cmds Startcmds[] = {
 	"telnet",	telnet1,	256, 0, NULL,
 	"tip",		tipstart,	256, 2, "start tip <interface>",
 #endif
-	"term",		term1,		256, 0, NULL,
+	"telnet",	tnstart,	256, 0, NULL,
 	"ttylink",	ttylstart,	256, 0, NULL,
-	"remote",	rem1,		768, 0, NULL,
 	NULL,
 };
 
@@ -419,12 +488,8 @@ static struct cmds Stopcmds[] = {
 #if	defined(AX25) && defined(MAILBOX)
 	"ax25",		ax250,		0, 0, NULL,
 #endif
-	"bsr",		bsr0,		0, 0, NULL,
 	"discard",	dis0,		0, 0, NULL,
 	"echo",		echo0,		0, 0, NULL,
-#if	defined(QFAX)
-	"fax",		fax0,		0, 0, NULL,
-#endif
 	"finger",	fin0,		0, 0, NULL,
 	"ftp",		ftp0,		0, 0, NULL,
 #if	defined(NETROM) && defined(MAILBOX)
@@ -443,9 +508,7 @@ static struct cmds Stopcmds[] = {
 	"telnet",	telnet0,	0, 0, NULL,
 	"tip",		tip0,		0, 2, "stop tip <interface>",
 #endif
-	"term",		term0,		0, 0, NULL,
 	"ttylink",	ttyl0,		0, 0, NULL,
-	"remote",	rem0,		0, 0, NULL,
 	NULL,
 };
 #endif	/* SERVERS */
@@ -792,45 +855,30 @@ struct asymode Asymode[] = {
 #else	/* not ASY */
 /* Stubs for refs to asy I/O in stdio when ASY not configured */
 int
-asy_open(name)
-char *name;
+asy_open(char *name)
+{
+	return -1;
+}
+asy_write(int dev,const void *buf,unsigned short cnt)
 {
 	return -1;
 }
 int
-asy_close(dev)
-int dev;
-{
-}
-asy_write(dev,buf,cnt)
-int dev;
-char *buf;
-int cnt;
+asy_read(int dev,void *buf,unsigned short cnt)
 {
 	return -1;
 }
 int
-asy_read(dev,buf,cnt);
-int dev;
-char *buf;
-int cnt;
+asy_close(int dev)
 {
 	return -1;
 }
-int
-asy_close(dev)
-int dev;
+int32
+asy_ioctl(struct iface *ifp,int cmd,int set,int32 val)
 {
 	return -1;
 }
 #endif	/* ASY */
-
-#ifndef	IPSEC
-void
-rtype(uint16 c)
-{
-}
-#endif
 
 /* daemons to be run at startup time */
 struct daemon Daemons[] = {
@@ -857,6 +905,7 @@ void (*Cfunc[])() = {
 #ifdef	SCC
 	scctimer,
 #endif
+	kbint,		/* gdb 4.12 doesn't pass kb interrupts */
 	NULL,
 };
 
@@ -887,7 +936,6 @@ void (*Shutdown[])() = {
 #ifdef	SOUND
 	sbshut,
 #endif
-	uchtimer,	/* Unlink timer handler from timer chain */
 	NULL,
 };
 
@@ -1076,21 +1124,3 @@ void *p;
 }
 #endif	/* SERVERS */
 
-dotest(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
-{
-	int32 stime,ftime;
-	char *bufa,*bufb;
-	int i;
-
-	bufa = malloc(1024);
-	bufb = malloc(1024);
-	stime = msclock();
-	for(i=0;i<1000;i++)
-		memcpy(bufa,bufb,1024);
-	ftime = msclock();
-	printf("Time for 1000 1024-byte copies: %lu ms\n",ftime - stime);
-	return 0;
-}

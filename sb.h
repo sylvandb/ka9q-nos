@@ -26,3 +26,10 @@
 
 void sbshut(void);
 
+int sb_adc(long,int,int);
+int sb_dac(long,int,int);
+int sb_idle(void);
+int sb_calibrate(long);
+int sb_send(struct mbuf **bpp);
+struct mbuf *sb_recv(void);
+

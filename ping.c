@@ -42,20 +42,20 @@ void *p;
 	if((ping.s = s = socket(AF_INET,SOCK_RAW,ICMP_PTCL)) == -1){
 		printf("Can't create socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	sp->inproc = keychar;	/* Intercept ^C */
 	if(SETSIG(EABORT)){
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("Resolving %s...\n",argv[1]);
 	if((ping.target = resolve(argv[1])) == 0){
 		printf("unknown\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	printf("Pinging %s\n",inet_ntoa(ping.target));
@@ -79,7 +79,7 @@ void *p;
 		 */
 		pingem(s,ping.target,0,MAXINT16,ping.len);
 		close(s);
-		freesession(sp);
+		freesession(&sp);
 		return 0;
 	}
 	sp->inproc = pingproc;
@@ -130,13 +130,10 @@ void *p;
 		 (ping.responses*100 + ping.sent/2)/ping.sent,
 		 rtt,ping.srtt,ping.mdev,ping.maxrtt,ping.minrtt);
 	}
-	if(sp->proc1 != NULL){
-		killproc(sp->proc1);
-		sp->proc1 = NULL;
-	}
+	killproc(&sp->proc1);
 	close(s);
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 static int
@@ -155,7 +152,7 @@ pinghdr(sp,ping)
 struct session *sp;
 struct ping *ping;
 {
-	printf("      sent      rcvd    %     rtt     avg    mdev     max     min\n");
+	printf("      sent      rcvd    %%     rtt     avg    mdev     max     min\n");
 }
 
 void
@@ -194,7 +191,7 @@ void *p;
 		}
 	} else {
 		for(;;){
-			pingem(s,ping->target,(uint16)ping->sent++,(uint16)s,ping->len);
+			pingem(s,ping->target,ping->sent++,s,ping->len);
 			ppause(ping->interval);
 		}
 	}
@@ -206,9 +203,9 @@ int
 pingem(s,target,seq,id,len)
 int s;		/* Raw socket on which to send ping */
 int32 target;	/* Site to be pinged */
-uint16 seq;	/* ICMP Echo Request sequence number */
-uint16 id;	/* ICMP Echo Request ID */
-uint16 len;	/* Length of optional data field */
+uint seq;	/* ICMP Echo Request sequence number */
+uint id;	/* ICMP Echo Request ID */
+uint len;	/* Length of optional data field */
 {
 	struct mbuf *data;
 	struct icmp icmp;
@@ -218,7 +215,8 @@ uint16 len;	/* Length of optional data field */
 	uint8 *cp;
 
 	clock = msclock();
-	data = ambufw((uint16)(len+sizeof(clock)));
+	data = ambufw(NET_HDR_PAD+len+sizeof(clock));
+	data->data += NET_HDR_PAD;
 	data->cnt = len+sizeof(clock);
 #define	counter	1
 #ifdef	rnd
@@ -268,17 +266,13 @@ int c;
 	case 'q':
 	case 3:	/* ctl-c - quit */
 		alert(sp->proc,EABORT);
-		if(Current->proc1 != NULL){
-			killproc(sp->proc1);
-			sp->proc1 = NULL;
-		}
+		killproc(&sp->proc1);
 		shutdown(p->s,2);
 		p->s = -1;
 		break;
 	case ' ':	/* Toggle pinger */
 		if(sp->proc1 != NULL){
-			killproc(sp->proc1);
-			sp->proc1 = NULL;
+			killproc(&sp->proc1);
 			fprintf(sp->output,"Pinging suspended, %lu sent\n",p->sent);
 		} else {
 			p->sent = p->responses = 0;

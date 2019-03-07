@@ -68,11 +68,10 @@ void *p;
 	}
 	fflush(stdout);
 
-	killproc(sp->proc1);
-	sp->proc1 = NULL;
+	killproc(&sp->proc1);
 	fclose(asy);
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 

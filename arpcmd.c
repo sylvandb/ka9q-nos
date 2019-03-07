@@ -63,7 +63,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 hardware;
+	enum arp_hwtype hardware;
 	int32 addr;
 	uint8 *hwaddr;
 	struct arp_tab *ap;
@@ -130,7 +130,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 hardware;
+	enum arp_hwtype hardware;
 	int32 addr;
 	struct arp_tab *ap;
 
@@ -178,7 +178,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct arp_tab *ap;
+	struct arp_tab *ap;
 	struct arp_tab *aptmp;
 	int i;
 
@@ -196,8 +196,8 @@ void *p;
 static void
 dumparp()
 {
-	register int i;
-	register struct arp_tab *ap;
+	int i;
+	struct arp_tab *ap;
 	char e[128];
 
 	printf("received %u badtype %u bogus addr %u reqst in %u replies %u reqst out %u\n",

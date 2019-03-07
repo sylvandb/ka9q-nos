@@ -37,7 +37,7 @@ int ntoharc(struct arc *arc,struct mbuf **bpp);
 char *parc(char *out,uint8 *addr);
 int garc(uint8 *out,char *cp);
 int anet_send(struct mbuf **bp,struct iface *iface,int32 gateway,uint8 tos);
-int anet_output(struct iface *iface,uint8 dest[],uint8 source[],uint16 type,
+int anet_output(struct iface *iface,uint8 dest[],uint8 source[],uint type,
 	struct mbuf **data);
 void aproc(struct iface *iface,struct mbuf **bp);
 

@@ -44,7 +44,7 @@ static char *
 stringparse(line)
 char *line;
 {
-	register char *cp = line;
+	char *cp = line;
 	unsigned long num;
 
 	while ( *line != '\0' && *line != '\"' ) {
@@ -117,11 +117,11 @@ char *line;
 }
 
 int
-cmdparse(cmds,line,p)
-struct cmds cmds[];
-register char *line;
-void *p;
-{
+cmdparse(
+struct cmds cmds[],
+ char *line,
+void *p
+){
 	struct cmds *cmdp;
 	char *argv[NARG],*cp;
 	char **pargv;
@@ -134,7 +134,7 @@ void *p;
 		argv[argc] = NULL;
 
 	for(argc = 0;argc < NARG;){
-		register int qflag = FALSE;
+		int qflag = FALSE;
 
 		/* Skip leading white space */
 		while(*line == ' ' || *line == '\t')
@@ -213,7 +213,7 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct cmds *cmdp;
+	struct cmds *cmdp;
 	char **pargv;
 	int found = 0;
 	int i;
@@ -274,7 +274,7 @@ char *argv[];
 		return 0;
 	}
 	for(bc = Boolcmds;bc->str != NULL;bc++){
-		if(strcmpi(argv[1],bc->str) == 0){
+		if(stricmp(argv[1],bc->str) == 0){
 			*var = bc->val;
 			return 0;
 		}
@@ -290,9 +290,9 @@ char *argv[];
 
 /* Subroutine for setting and displaying bit values */
 int
-bit16cmd(bits,mask,label,argc,argv)
-uint16 *bits;
-uint16 mask;
+bitcmd(bits,mask,label,argc,argv)
+uint *bits;
+uint mask;
 char *label;
 int argc;
 char *argv[];

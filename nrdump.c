@@ -18,7 +18,7 @@ int check;
 	uint8 src[AXALEN],dest[AXALEN];
 	char tmp[AXBUF];
 	uint8 thdr[NR4MINHDR];
-	register i;
+	int i;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;

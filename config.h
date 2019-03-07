@@ -9,14 +9,14 @@
 #define	TRACE		1	/* Include packet tracing code */
 #define	RIP		1	/* Include RIP routing */
 #define	HOPCHECK	1	/* IP path tracing command */
-#define	DIALER		1	/* SLIP redial code */
+#undef	DIALER		1	/* SLIP redial code */
 #undef	NRS		1	/* NET/ROM async interface */
-#define	NETROM		1	/* NET/ROM network support */
+#undef	NETROM		1	/* NET/ROM network support */
 #undef	LZW		1	/* LZW-compressed sockets */
 #define	SLIP		1	/* Serial line IP on built-in ports */
-#undef PPP		1	/* Point-to-Point Protocol code */
-#define VJCOMPRESS	1	/* Van Jacobson TCP compression for SLIP */
-#define	TRACEBACK	1	/* Stack traceback code */
+#undef	PPP		1	/* Point-to-Point Protocol code */
+#define	VJCOMPRESS	1	/* Van Jacobson TCP compression for SLIP */
+#undef	TRACEBACK	1	/* Stack traceback code */
 #undef	LOCSOCK		1	/* Local loopback sockets */
 #define	SCROLLBACK	1000	/* Default lines in session scrollback file */
 
@@ -31,7 +31,7 @@
 /* Hardware driver options */
 #define	SOUND		1	/* Soundblaster 16 */
 #undef	ARCNET		1	/* ARCnet via PACKET driver */
-#define	KISS		1	/* KISS TNC code */
+#undef	KISS		1	/* KISS TNC code */
 #undef	HS		1	/* High speed (56kbps) modem driver */
 #undef	HAPN		1	/* Hamilton Area Packet Network driver code */
 #undef	EAGLE		1	/* Eagle card driver */
@@ -39,13 +39,10 @@
 #define	PACKET		1	/* FTP Software's Packet Driver interface */
 #undef	PC100		1	/* PAC-COM PC-100 driver code */
 #undef	APPLETALK	1	/* Appletalk interface (Macintosh) */
-#define	DRSI		1	/* DRSI PCPA slow-speed driver */
+#undef	DRSI		1	/* DRSI PCPA slow-speed driver */
 #undef	SCC		1	/* PE1CHL generic scc driver */
 #define	ASY		1	/* Asynch driver code */
 #undef	SLFP		1	/* SLFP packet driver class supported */
-#undef	CDMA_DM		1	/* CDMA mobile DM interface */
-#undef	QTSO		1	/* CDMA QTSO data interface */
-#undef	DMLITE		1	/* CDMA mobile asynch DM interface */
 #undef	KSP		1	/* Kitchen Sink Protocol */
 
 #if defined(NRS) && !defined(NETROM)

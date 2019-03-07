@@ -21,7 +21,7 @@ int check;		/* If 0, bypass checksum verify */
 {
 	struct udp udp;
 	struct pseudo_header ph;
-	uint16 csum;
+	uint csum;
 
 	if(bpp == NULL || *bpp == NULL)
 		return;

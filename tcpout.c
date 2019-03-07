@@ -13,14 +13,13 @@
  * if there is data to be sent or if "force" is non zero
  */
 void
-tcp_output(tcb)
-register struct tcb *tcb;
+tcp_output(struct tcb *tcb)
 {
 	struct mbuf *dbp;	/* Header and data buffer pointers */
 	struct tcp seg;		/* Local working copy of header */
-	uint16 ssize;		/* Size of current segment being sent,
+	uint ssize;		/* Size of current segment being sent,
 				 * including SYN and FIN flags */
-	uint16 dsize;		/* Size of segment less SYN and FIN */
+	uint dsize;		/* Size of segment less SYN and FIN */
 	int32 usable;		/* Usable window */
 	int32 sent;		/* Sequence count (incl SYN/FIN) already
 				 * in the pipe but not yet acked */
@@ -140,8 +139,8 @@ register struct tcb *tcb;
 		 * sndcnt but don't actually sit in the send queue, extract
 		 * will return one less than dsize if a FIN needs to be sent.
 		 */
-		dbp = ambufw(TCP_HDR_PAD+dsize);
-		dbp->data += TCP_HDR_PAD;	/* Allow room for other hdrs */
+		dbp = ambufw(NET_HDR_PAD+dsize);
+		dbp->data += NET_HDR_PAD;	/* Allow room for other hdrs */
 		if(dsize != 0){
 			int32 offset;
 
@@ -152,7 +151,7 @@ register struct tcb *tcb;
 			if(!tcb->flags.synack && sent != 0)
 				offset--;
 
-			dbp->cnt = extract(tcb->sndq,(uint16)offset,dbp->data,dsize);
+			dbp->cnt = extract(tcb->sndq,(uint)offset,dbp->data,dsize);
 			if(dbp->cnt != dsize){
 				/* We ran past the end of the send queue;
 				 * send a FIN

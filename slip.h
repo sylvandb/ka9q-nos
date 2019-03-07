@@ -36,9 +36,9 @@ struct slip {
 	struct mbuf *rbp_head;	/* Head of mbuf chain being filled */
 	struct mbuf *rbp_tail;	/* Pointer to mbuf currently being written */
 	uint8 *rcp;		/* Write pointer */
-	uint16 rcnt;		/* Length of mbuf chain */
+	uint rcnt;		/* Length of mbuf chain */
 	struct mbuf *tbp;	/* Transmit mbuf being sent */
-	uint16 errors;		/* Receiver input errors */
+	uint errors;		/* Receiver input errors */
 	int type;		/* Protocol of input */
 	int (*send)(int,struct mbuf **);	/* send mbufs to device */
 	int (*get)(int);	/* fetch input chars from device */

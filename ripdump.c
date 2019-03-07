@@ -16,7 +16,7 @@ struct mbuf **bpp;
 	struct rip_route entry;
 	int i;
 	int cmd,version;
-	uint16 len;
+	uint len;
 	
 	fprintf(fp,"RIP: ");
 	cmd = PULLCHAR(bpp);

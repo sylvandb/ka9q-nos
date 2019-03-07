@@ -91,8 +91,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct iface *ifp = p;
-	register struct ppp_s *ppp_p = ifp->edv;
+	struct iface *ifp = p;
+	struct ppp_s *ppp_p = ifp->edv;
 
 	return subcmd(Papcmds, argc, argv, &(ppp_p->fsm[Pap]));
 }
@@ -105,8 +105,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	register struct fsm_s *fsm_p = p;
-	register struct pap_s *pap_p = fsm_p->pdv;
+	struct fsm_s *fsm_p = p;
+	struct pap_s *pap_p = fsm_p->pdv;
 
 	if (argc < 2) {
 		printf("%s\n",
@@ -207,7 +207,7 @@ void *v2;
 	if ( wait_code != EABORT ) {
 		ppause ( 10000L );
 	}
-	freesession(sp);
+	freesession(&sp);
 	pap_p->pp = NULL;
 }
 
@@ -282,7 +282,7 @@ struct fsm_s *fsm_p;
 {
 	struct pap_s *pap_p = fsm_p->pdv;
 	struct mbuf *req_bp = NULL;
-	register uint8 *cp;
+	uint8 *cp;
 	int len;
 
 	PPP_DEBUG_ROUTINES("pap_makereq()");
@@ -342,7 +342,7 @@ pap_opening(fsm_p, flag)
 struct fsm_s *fsm_p;
 int flag;
 {
-	register struct ppp_s *ppp_p = fsm_p->ppp_p;
+	struct ppp_s *ppp_p = fsm_p->ppp_p;
 
 	fsm_log(fsm_p, "Open");
 
@@ -377,8 +377,8 @@ struct mbuf **data
 
 	/* Extract userID/password sent by remote host */
 	if ( (userlen = pullchar(data)) != -1 ) {
-		register int i;
-		register char *cp;
+		int i;
+		char *cp;
 
 		cp = username = mallocw(userlen+1);
 		for ( i = userlen; i-- > 0; ) {
@@ -393,8 +393,8 @@ struct mbuf **data
 #endif
 
 	if ( (passwordlen = pullchar(data)) != -1 ) {
-		register int i;
-		register char *cp;
+		int i;
+		char *cp;
 
 		cp = password = mallocw(passwordlen+1);
 		for ( i = passwordlen; i-- > 0; ) {

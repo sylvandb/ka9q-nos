@@ -115,6 +115,7 @@ int doexit(int argc,char *argv[],void *p);
 int dohostname(int argc,char *argv[],void *p);
 int dolog(int argc,char *argv[],void *p);
 int dohelp(int argc,char *argv[],void *p);
+int dorhelp(int argc,char *argv[],void *p);
 int doattach(int argc,char *argv[],void *p);
 int doparam(int argc,char *argv[],void *p);
 int dopage(int argc,char *argv[],void *p);
@@ -127,6 +128,7 @@ int doboot(int argc,char *argv[],void *p);
 int dorepeat(int argc,char *argv[],void *p);
 int dodebug(int argc,char *argv[],void *p);
 int dowipe(int argc,char *argv[],void *p);
+int doreboot(int argc,char *argv[],void *p);
 
 /* In mailbox.c: */
 int dombox(int argc,char *argv[],void *p);
@@ -201,6 +203,9 @@ int dorecord(int argc,char *argv[],void *p);
 int dosfsize(int argc,char *argv[],void *p);
 int doupload(int argc,char *argv[],void *p);
 
+/* In sim.c: */
+int dosim(int argc,char *argv[],void *p);
+
 /* In smisc.c: */
 int dis1(int argc,char *argv[],void *p);
 int dis0(int argc,char *argv[],void *p);
@@ -240,6 +245,10 @@ int dotopt(int argc,char *argv[],void *p);
 
 /* In tip.c: */
 int dotip(int argc,char *argv[],void *p);
+
+/* In tnserv.c: */
+int tnstart(int argc,char *argv[],void *p);
+int tn0(int argc,char *argv[],void *p);
 
 /* In ttylink.c: */
 int ttylstart(int argc,char *argv[],void *p);

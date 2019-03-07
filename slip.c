@@ -137,7 +137,7 @@ slip_encode(struct mbuf **bpp)
 	/* Allocate output mbuf that's twice as long as the packet.
 	 * This is a worst-case guess (consider a packet full of FR_ENDs!)
 	 */
-	lbp = alloc_mbuf((uint16)(2*len_p(*bpp) + 2));
+	lbp = alloc_mbuf(2*len_p(*bpp) + 2);
 	if(lbp == NULL){
 		/* No space; drop */
 		free_p(bpp);

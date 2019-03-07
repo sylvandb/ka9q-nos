@@ -9,19 +9,19 @@
 #include "trace.h"
 #include "socket.h"
 
-static char *decode_type(uint16 type);
+static char *decode_type(uint type);
 
 /* Dump an AX.25 packet header */
 void
-ax25_dump(fp,bpp,check)
-FILE *fp;
-struct mbuf **bpp;
-int check;	/* Not used */
-{
+ax25_dump(
+FILE *fp,
+struct mbuf **bpp,
+int check	/* Not used */
+){
 	char tmp[AXBUF];
 	char frmr[3];
 	int control,pid,seg;
-	uint16 type;
+	uint type;
 	int unsegmented;
 	struct ax25 hdr;
 	uint8 *hp;
@@ -131,8 +131,7 @@ int check;	/* Not used */
 
 }
 static char *
-decode_type(type)
-uint16 type;
+decode_type(uint type)
 {
 	switch(type){
 	case I:
@@ -164,10 +163,10 @@ uint16 type;
  * this checks only the ultimate destination, not the digipeater field
  */
 int
-ax_forus(iface,bp)
-struct iface *iface;
-struct mbuf *bp;
-{
+ax_forus(
+struct iface *iface,
+struct mbuf *bp
+){
 	struct mbuf *bpp;
 	uint8 dest[AXALEN];
 

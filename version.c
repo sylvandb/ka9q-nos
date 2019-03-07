@@ -1,2 +1,2 @@
 /* version control information */
-char Version[] = "951123 (KA9Q-new mbufs)";
+char Version[] = "960812 (KA9Q - DJGPP)";

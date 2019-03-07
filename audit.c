@@ -45,8 +45,8 @@ int line
 ){
 	union header *blk;
 	uint8 *bufstart,*bufend;
-	uint16 overhead = sizeof(union header) + sizeof(struct mbuf);
-	uint16 datasize;
+	uint overhead = sizeof(union header) + sizeof(struct mbuf);
+	uint datasize;
 	int errors = 0;
 	uint8 *heapbot,*heaptop;
 

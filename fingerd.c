@@ -22,13 +22,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 port;
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_FINGER;
-	else
-		port = atoi(argv[1]);
-
+	port = (argc < 2) ? IPPORT_FINGER : atoi(argv[1]);
 	return start_tcp(port,"Finger Server",fingerd,512);
 }
 static void
@@ -83,12 +79,8 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 port;
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_FINGER;
-	else
-		port = atoi(argv[1]);
-
+	port = (argc < 2) ? IPPORT_FINGER : atoi(argv[1]);
 	return stop_tcp(port);
 }

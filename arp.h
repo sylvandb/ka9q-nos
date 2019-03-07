@@ -54,10 +54,10 @@ extern char *Arptypes[];	/* Type fields in ASCII, defined in arpcmd */
 
 /* Table of hardware types known to ARP */
 struct arp_type {
-	uint16 hwalen;		/* Hardware length */
-	uint16 iptype;		/* Hardware type field for IP */
-	uint16 arptype;		/* Hardware type field for ARP */
-	uint16 pendtime;	/* # secs to wait pending response */
+	uint hwalen;		/* Hardware length */
+	uint iptype;		/* Hardware type field for IP */
+	uint arptype;		/* Hardware type field for ARP */
+	uint pendtime;	/* # secs to wait pending response */
 	uint8 *bdcst;		/* Hardware broadcast address */
 	char *(*format)(char *,uint8 *);
 				/* Function that formats addresses */
@@ -69,7 +69,7 @@ extern struct arp_type Arp_type[];
 /* Format of an ARP request or reply packet. From p. 3 */
 struct arp {
 	enum arp_hwtype hardware;	/* Hardware type */
-	uint16 protocol;		/* Protocol type */
+	uint protocol;		/* Protocol type */
 	uint8 hwalen;			/* Hardware address length, bytes */
 	uint8 pralen;			/* Length of protocol address */
 	enum arp_opcode opcode;		/* ARP opcode (request/reply) */

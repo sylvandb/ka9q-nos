@@ -1,3 +1,4 @@
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "ip.h"

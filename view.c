@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <conio.h>
+#include <errno.h>
 #include "global.h"
 #include "session.h"
 #include "tty.h"
@@ -178,7 +179,7 @@ void *p2;	/* If non-null, name to give to session. We free it */
 		}
 	}
 done:	fclose(fp);
-	freesession(sp);
+	freesession(&sp);
 }
 /* Given a starting offset into an open file stream, scan forwards
  * or backwards the specified number of lines and return a pointer to the

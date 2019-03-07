@@ -15,22 +15,21 @@
 struct ax25_cb *Ax25_cb;
 
 /* Default AX.25 parameters */
-int32 T3init = 0;		/* No keep-alive polling */
-uint16 Maxframe = 1;		/* Stop and wait */
-uint16 N2 = 10;			/* 10 retries */
-uint16 Axwindow = 2048;		/* 2K incoming text before RNR'ing */
-uint16 Paclen = 256;		/* 256-byte I fields */
-uint16 Pthresh = 128;		/* Send polls for packets larger than this */
-int32 Axirtt = 5000;		/* Initial round trip estimate, ms */
-uint16 Axversion = V1;		/* Protocol version */
-int32 Blimit = 30;		/* Retransmission backoff limit */
+uint32 T3init = 0;		/* No keep-alive polling */
+uint Maxframe = 1;		/* Stop and wait */
+uint N2 = 10;			/* 10 retries */
+uint Axwindow = 2048;		/* 2K incoming text before RNR'ing */
+uint Paclen = 256;		/* 256-byte I fields */
+uint Pthresh = 128;		/* Send polls for packets larger than this */
+uint32 Axirtt = 5000;		/* Initial round trip estimate, ms */
+uint Axversion = V1;		/* Protocol version */
+uint32 Blimit = 30;		/* Retransmission backoff limit */
 
 /* Look up entry in connection table */
 struct ax25_cb *
-find_ax25(addr)
-register uint8 *addr;
+find_ax25(uint8 *addr)
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 	struct ax25_cb *axlast = NULL;
 
 	/* Search list */
@@ -52,10 +51,9 @@ register uint8 *addr;
 
 /* Remove entry from connection table */
 void
-del_ax25(conn)
-struct ax25_cb *conn;
+del_ax25(struct ax25_cb *conn)
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 	struct ax25_cb *axlast = NULL;
 
 	for(axp = Ax25_cb; axp != NULL; axlast=axp,axp = axp->next){
@@ -87,10 +85,9 @@ struct ax25_cb *conn;
  * is still responsible for filling in the reply address
  */
 struct ax25_cb *
-cr_ax25(addr)
-uint8 *addr;
+cr_ax25(uint8 *addr)
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 
 	if(addr == NULL)
 		return NULL;
@@ -134,15 +131,11 @@ uint8 *addr;
  *   Return -1 on error, 0 if OK
  */
 int
-setcall(out,call)
-uint8 *out;
-char *call;
+setcall(uint8 *out,char *call)
 {
-	int csize;
+	int i,csize;
 	unsigned ssid;
-	register int i;
-	register char *dp;
-	char c;
+	char *dp,c;
 
 	if(out == NULL || call == NULL || *call == '\0')
 		return -1;
@@ -182,8 +175,7 @@ char *call;
 	return 0;
 }
 int
-addreq(a,b)
-register uint8 *a,*b;
+addreq(uint8 *a,uint8 *b)
 {
 	if(memcmp(a,b,ALEN) != 0 || ((a[ALEN] ^ b[ALEN]) & SSID) != 0)
 		return 0;
@@ -192,13 +184,10 @@ register uint8 *a,*b;
 }
 /* Convert encoded AX.25 address to printable string */
 char *
-pax25(e,addr)
-char *e;
-uint8 *addr;
+pax25(char *e,uint8 *addr)
 {
-	register int i;
-	char c;
-	char *cp;
+	int i;
+	char c,*cp;
 
 	cp = e;
 	for(i=ALEN;i != 0;i--){
@@ -217,23 +206,21 @@ uint8 *addr;
  * This is done by masking out any sequence numbers and the
  * poll/final bit after determining the general class (I/S/U) of the frame
  */
-uint16
-ftype(control)
-register int control;
+uint
+ftype(uint control)
 {
 	if((control & 1) == 0)	/* An I-frame is an I-frame... */
 		return I;
 	if(control & 2)		/* U-frames use all except P/F bit for type */
-		return (uint16)control & ~PF;
+		return control & ~PF;
 	else			/* S-frames use low order 4 bits for type */
-		return (uint16)control & 0xf;
+		return control & 0xf;
 }
 
 void
-lapb_garbage(red)
-int red;
+lapb_garbage(int red)
 {
-	register struct ax25_cb *axp;
+	struct ax25_cb *axp;
 
 	for(axp=Ax25_cb;axp != NULL;axp = axp->next){
 		mbuf_crunch(&axp->rxq);

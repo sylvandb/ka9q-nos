@@ -166,7 +166,7 @@ int *fromlen
 	int cnt;
 	
 	while((ax25 = up->cb.ax25) != NULL
-	 && (*bpp = recv_ax25(ax25,(uint16)0)) == NULL){
+	 && (*bpp = recv_ax25(ax25,0)) == NULL){
 		if(up->noblock){
 			errno = EWOULDBLOCK;
 			return -1;
@@ -432,7 +432,7 @@ int cnt
 /* AX25 state change upcall routine */
 void
 s_ascall(
-register struct ax25_cb *axp,
+struct ax25_cb *axp,
 int old,
 int new
 ){

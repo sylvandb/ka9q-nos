@@ -52,8 +52,8 @@ int32 said
 	struct icmplink *ipp;
 	struct icmp icmp;	/* ICMP header */
 	struct ip oip;		/* Offending datagram header */
-	uint16 type;		/* Type of ICMP message */
-	uint16 length;
+	uint type;		/* Type of ICMP message */
+	uint length;
 
 	icmpInMsgs++;
 	if(rxbroadcast){
@@ -175,8 +175,8 @@ union icmp_args *args
 ){
 	struct mbuf *bp;
 	struct icmp icmp;	/* ICMP protocol header */
-	uint16 dlen;		/* Length of data portion of offending pkt */
-	uint16 length;		/* Total length of reply */
+	uint dlen;		/* Length of data portion of offending pkt */
+	uint length;		/* Total length of reply */
 
 	if(ip == NULL)
 		return -1;

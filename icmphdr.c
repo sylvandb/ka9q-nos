@@ -13,8 +13,8 @@ htonicmp(
 struct icmp *icmp,
 struct mbuf **bpp
 ){
-	register uint8 *cp;
-	uint16 checksum;
+	uint8 *cp;
+	uint checksum;
 
 	pushdown(bpp,NULL,ICMPLEN);
 	cp = (*bpp)->data;
@@ -59,10 +59,10 @@ struct mbuf **bpp
 }
 /* Pull off ICMP header */
 int
-ntohicmp(icmp,bpp)
-struct icmp *icmp;
-struct mbuf **bpp;
-{
+ntohicmp(
+struct icmp *icmp,
+struct mbuf **bpp
+){
 	uint8 icmpbuf[8];
 
 	if(icmp == (struct icmp *)NULL)

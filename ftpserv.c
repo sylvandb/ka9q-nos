@@ -8,6 +8,7 @@
 #include <io.h>
 #include <dir.h>
 #endif
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "proc.h"
@@ -89,35 +90,29 @@ static char syst[] = "215 %s Type: L%d Version: %s\n";
 
 /* Start up FTP service */
 int
-ftpstart(argc,argv,p)
-int argc;
-char *argv[];
-void *p;
+ftpstart(int argc,char *argv[],void *p)
 {
-	uint16 port;
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_FTP;
-	else
-		port = atoi(argv[1]);
+	port = (argc < 2) ? IPPORT_FTP : atoi(argv[1]);
 
 	return start_tcp(port,"FTP Server",ftpserv,2048);
 }
 static void
-ftpserv(s,n,p)
-int s;	/* Socket with user connection */
-void *n;
-void *p;
-{
+ftpserv(
+int s,	/* Socket with user connection */
+void *n,
+void *p
+){
 	struct ftpserv ftp;
 	char **cmdp,buf[512],*arg,*cp,*cp1,*file,*mode;
-	long t;
+	time_t t;
 	int i;
 	struct sockaddr_in socket;
 
 	memset(&ftp,0,sizeof(ftp));	/* Start with clear slate */
 	ftp.control = fdopen(s,"r+t");
-	sockowner(fileno(ftp.control),Curproc);		/* We own it now */
+	sockowner(s,Curproc);		/* We own it now */
 	setvbuf(ftp.control,NULL,_IOLBF,BUFSIZ);
 	if(availmem() != 0){
 		fprintf(ftp.control,lowmem);
@@ -452,13 +447,9 @@ int argc;
 char *argv[];
 void *p;
 {
-	uint16 port;
+	uint port;
 
-	if(argc < 2)
-		port = IPPORT_FTP;
-	else
-		port = atoi(argv[1]);
-
+	port = (argc < 2) ? IPPORT_FTP : atoi(argv[1]);
 	return stop_tcp(port);
 }
 static

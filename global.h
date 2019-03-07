@@ -11,7 +11,7 @@
  * command line, so it may be safely included first.
  */
 
-#if	!defined(AMIGA) && (defined(LATTICE) || defined(MAC) || defined(__TURBOC__))
+#if	!defined(AMIGA) && (defined(MAC) || defined(MSDOS))
 /* These compilers require special open modes when reading binary files.
  *
  * "The single most brilliant design decision in all of UNIX was the
@@ -38,15 +38,19 @@
 
 #endif
 
+#include <sys/types.h>
+
 /* These two lines assume that your compiler's longs are 32 bits and
  * shorts are 16 bits. It is already assumed that chars are 8 bits,
  * but it doesn't matter if they're signed or unsigned.
  */
 typedef long int32;		/* 32-bit signed integer */
+typedef unsigned int uint;	/* 16 or 32-bit unsigned integer */
 typedef unsigned long uint32;	/* 32-bit unsigned integer */
 typedef unsigned short uint16;	/* 16-bit unsigned integer */
 typedef unsigned char byte_t;	/*  8-bit unsigned integer */
 typedef unsigned char uint8;	/* 8-bit unsigned integer */
+typedef unsigned long long uint64;	/* 64-bit unsigned integer */
 #define	MAXINT16 0xffff		/* Largest 16-bit integer */
 #define	MAXINT32 0xffffffff	/* Largest 32-bit integer */
 #define	NBBY	8		/* 8 bits/byte */
@@ -149,7 +153,6 @@ typedef unsigned char uint8;	/* 8-bit unsigned integer */
 /* Various low-level and miscellaneous functions */
 int availmem(void);
 void *callocw(unsigned nelem,unsigned size);
-int32 clock();
 int dirps(void);
 void free(void *);
 #define FREE(p)		{free(p); p = NULL;}
@@ -159,17 +162,17 @@ int htob(char c);
 int htoi(char *);
 int readhex(uint8 *,char *,int);
 long htol(char *);
-char *inbuf(uint16 port,char *buf,uint16 cnt);
-uint16 hash_ip(int32 addr);
+char *inbuf(uint port,char *buf,uint cnt);
+uint hash_ip(int32 addr);
 int istate(void);
 void logmsg(int s,char *fmt, ...);
-int ilog2(uint16 x);
+int ilog2(uint x);
 void *ltop(long);
 void *malloc(size_t nb);
 void *mallocw(size_t nb);
-int memcnt(uint8 *buf,uint8 c,int size);
+int memcnt(const uint8 *buf,uint8 c,int size);
 void memxor(uint8 *,uint8 *,unsigned int);
-char *outbuf(uint16 port,char *buf,uint16 cnt);
+char *outbuf(uint port,char *buf,uint cnt);
 int32 rdclock(void);
 void restore(int);
 void rip(char *);

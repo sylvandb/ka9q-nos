@@ -14,6 +14,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
 #include "global.h"
 #include "ftpserv.h"
 #include "smtp.h"

@@ -26,7 +26,8 @@ struct _file{
 		_FL_SOCK,	/* Associated with network socket */
 		_FL_ASY,	/* Asynch port */
 		_FL_DISPLAY,	/* Associated with display driver */
-		_FL_PIPE	/* Pipe mode */
+		_FL_PIPE,	/* Pipe mode */
+		_FL_SOUND	/* Sound mode */
 	} type;
 
 	enum {
@@ -51,11 +52,6 @@ struct _file{
 };
 
 typedef struct _file FILE;
-
-#ifndef _SIZE_T
-#define _SIZE_T
-typedef unsigned size_t;
-#endif
 
 #undef	NULL
 #define	NULL	0
@@ -96,32 +92,36 @@ char *fgets(char *buf,int len,FILE *fp);
 void flushall(void);
 int fmode (FILE *fp,int mode);
 char *fpname(FILE *fp);
-int fprintf(FILE *fp,char *fmt,...);
+int fprintf(FILE *fp,const char *fmt,...);
 int fputc(int c,FILE *fp);
 int fputs(char *buf,FILE *fp);
 size_t fread(void *ptr,size_t size,size_t n,FILE *fp);
+int frrdy(FILE *fp);
 FILE *freopen(char *name,char *mode,FILE *fp);
 int fseek(FILE *fp,long offset,int whence);
 long ftell(FILE *fp);
 size_t fwrite(void *ptr,size_t size,size_t n,FILE *fp);
 char *gets(char *s);
+int getshort(FILE *fp);
 void perror(const char *s);
 FILE *pipeopen(void);
-int printf(char *fmt,...);
+int printf(const char *fmt,...);
 int puts(char *s);
+int putshort(short c,FILE *fp);
 int rename(const char *,const char *);
 void setbuf(FILE *fp,char *buf);
 int seteol(FILE *fp,char *seq);
 int setvbuf(FILE *fp,char *buf,int type,int size);
-int sprintf(char *,char *, ...);
+int sprintf(char *,const char *, ...);
 int sscanf(char *,char *,...);	/* From regular library */
+FILE *soundopen(void);
 FILE *tmpfile(void);
 char *tmpnam(char *);	/* From regular library */
 int ungetc(int c,FILE *fp);
 int unlink(const char *);	/* From regular library */
-int vfprintf(FILE *fp,char *fmt, void *args);
-int vprintf(char *fmt, void *args);
-int vsprintf(char *,char *,void *);
+int vfprintf(FILE *fp,const char *fmt, void *args);
+int vprintf(const char *fmt, void *args);
+int vsprintf(char *,const char *,void *);
 
 extern int _clrtmp;	/* Flag controlling wipe of temporary files on close */
 

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <errno.h>
 #include "global.h"
 #include "mbuf.h"
 #include "timer.h"
@@ -109,8 +110,7 @@ char *argv[];
 		free(ifp->dstate);
 		ifp->dstate = NULL;
 	}
-	killproc(ifp->supv);
-	ifp->supv = NULL;
+	killproc(&ifp->supv);
 
 	dialer = (struct asydialer *)calloc(1,sizeof(struct asydialer));
 	ifp->dstate = dialer;
@@ -365,7 +365,7 @@ void *p;
 			tprintf(ifp,"current speed = %u bps\n", Asy[ifp->dev].speed);
 		return 0;
 	}
-	return asy_speed(ifp->dev,(uint16)atol(argv[1]));
+	return asy_speed(ifp->dev,atol(argv[1]));
 }
 
 
@@ -396,7 +396,7 @@ char *argv[];
 void *p;
 {
 	struct iface *ifp = p;
-	register int c = -1;
+	int c = -1;
 	char *cp;
 
 	kalarm(atol(argv[1]));
@@ -424,7 +424,7 @@ void *p;
 		}
 	}
 	if(argc > 3){
-		uint16 speed = 0;
+		uint speed = 0;
 
 		if(stricmp(argv[3], "speed") != 0)
 			return -1;

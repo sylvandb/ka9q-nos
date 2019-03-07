@@ -31,7 +31,6 @@
 #include "iface.h"
 #include "mbuf.h"
 #include "netuser.h"
-#include "pktdrvr.h"
 #include "timer.h"
 #include "bootpd.h"
 
@@ -95,15 +94,15 @@ struct drange_desc {
 	struct timer	timer;		/* Timer for reclaiming */
         int32    	dr_start;       /* First IP address in range. */
         int32    	dr_end;         /* Last IP address in range. */
-        uint16           dr_acount;      /* Number of IP addresses in range. */
-        uint16           dr_fcount;      /* Number of IP addresses in free. */
-        uint16           dr_rcount;      /* Number of IP addresses on reclmation queue  */
-        uint16           dr_thon;        /* Threshold for turning on reclaimation. */
-        uint16           dr_thcritical;  /* Threshold for critical reclaimation. */
-        uint16           dr_thoff;       /* Threshold for turning off reclaimation. */
+        uint           dr_acount;      /* Number of IP addresses in range. */
+        uint           dr_fcount;      /* Number of IP addresses in free. */
+        uint           dr_rcount;      /* Number of IP addresses on reclmation queue  */
+        uint           dr_thon;        /* Threshold for turning on reclaimation. */
+        uint           dr_thcritical;  /* Threshold for critical reclaimation. */
+        uint           dr_thoff;       /* Threshold for turning off reclaimation. */
         int32           dr_time_addrretry;      /* Time to wait before retrying addresses.
 						   Varies with state. */
-        uint16           dr_hwaddrlen;   /* Length of hardware address. */
+        uint           dr_hwaddrlen;   /* Length of hardware address. */
 	uint8   dr_rstate;      /* Reclaimation state. */
 	uint8   dr_vstate;      /* Verification state. */
         time_t          dr_rtime;       /* Time stamp for reclaimation. */
@@ -452,7 +451,7 @@ int pendtime;
 	struct iface *iface;
 	long now;
 	struct arp_tab *ap;
-	uint16 arpType;
+	uint arpType;
 	
  	now = time(NULL);
  	iface = dr->dr_iface;
@@ -790,7 +789,7 @@ int32 rend;			/* Last address in range. */
 	struct daddr *da;	/* Pointer to an address structure. */
 	int32 rcount;		/* Number of addresses range. */
 	time_t now;		/* Current time. */
-	uint16 i;
+	uint i;
 	char ipc[16], ipd[16];
 
         /* Find the network table */

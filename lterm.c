@@ -41,7 +41,7 @@ void *p;
 	if((fsocket.sin_addr.s_addr = resolve(argv[2])) == 0){
 		printf(Badhost,argv[2]);
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		return 1;
 	}
 	if(argc > 3)
@@ -74,7 +74,7 @@ void *p;
 	if((s = socket(AF_INET,SOCK_STREAM,0)) == -1){
 		printf("Can't create socket\n");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		goto cleanup;
 	}
 	settos(s,LOW_DELAY);
@@ -83,7 +83,7 @@ void *p;
 	if(connect(s,(struct sockaddr *)&fsocket,SOCKSIZE) == -1){
 		perror("connect failed");
 		keywait(NULL,1);
-		freesession(sp);
+		freesession(&sp);
 		goto cleanup;
 	}
 	/* Spawn task to handle network -> serial port traffic */
@@ -96,12 +96,11 @@ void *p;
 		fflush(network);
 	}			
 cleanup:
-	killproc(sp->proc1);
-	sp->proc1 = NULL;
+	killproc(&sp->proc1);
 	ifp->raw = rawsave;
 	resume(ifp->rxproc);
 	keywait(NULL,1);
-	freesession(sp);
+	freesession(&sp);
 	return 0;
 }
 /* Task to handle network -> serial port traffic */

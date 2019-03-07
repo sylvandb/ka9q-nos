@@ -84,13 +84,13 @@ struct ax25_cb {
 	uint8 vr;			/* Our receive state variable */
 	uint8 unack;			/* Number of unacked frames */
 	int maxframe;			/* Transmit flow control level, frames */
-	uint16 paclen;			/* Maximum outbound packet size, bytes */
-	uint16 window;			/* Local flow control limit, bytes */
+	uint paclen;			/* Maximum outbound packet size, bytes */
+	uint window;			/* Local flow control limit, bytes */
 	enum {
 		V1=1,			/* AX.25 Version 1 */
 		V2			/* AX.25 Version 2 */
 	} proto;			/* Protocol version */
-	uint16 pthresh;			/* Poll threshold, bytes */
+	uint pthresh;			/* Poll threshold, bytes */
 	unsigned retries;		/* Retry counter */
 	unsigned n2;			/* Retry limit */
 	enum {
@@ -131,8 +131,8 @@ extern struct axlink Axlink[];
 
 extern struct ax25_cb Ax25default,*Ax25_cb;
 extern char *Ax25states[],*Axreasons[];
-extern int32 Axirtt,T3init,Blimit;
-extern uint16 N2,Maxframe,Paclen,Pthresh,Axwindow,Axversion;
+extern uint32 Axirtt,T3init,Blimit;
+extern uint N2,Maxframe,Paclen,Pthresh,Axwindow,Axversion;
 
 /* In ax25cmd.c: */
 void st_ax25(struct ax25_cb *axp);
@@ -147,12 +147,12 @@ int ax25val(struct ax25_cb *axp);
 int disc_ax25(struct ax25_cb *axp);
 int kick_ax25(struct ax25_cb *axp);
 struct ax25_cb *open_ax25(struct iface *,uint8 *,uint8 *,
-	int,uint16,
+	int,uint,
 	void (*)(struct ax25_cb *,int),
 	void (*)(struct ax25_cb *,int),
 	void (*)(struct ax25_cb *,int,int),
 	int user);
-struct mbuf *recv_ax25(struct ax25_cb *axp,uint16 cnt);
+struct mbuf *recv_ax25(struct ax25_cb *axp,uint cnt);
 int reset_ax25(struct ax25_cb *axp);
 int send_ax25(struct ax25_cb *axp,struct mbuf **bp,int pid);
 
@@ -161,7 +161,7 @@ void est_link(struct ax25_cb *axp);
 void lapbstate(struct ax25_cb *axp,int s);
 int lapb_input(struct ax25_cb *axp,int cmdrsp,struct mbuf **bp);
 int lapb_output(struct ax25_cb *axp);
-struct mbuf *segmenter(struct mbuf **bp,uint16 ssize);
+struct mbuf *segmenter(struct mbuf **bp,uint ssize);
 int sendctl(struct ax25_cb *axp,int cmdrsp,int cmd);
 int sendframe(struct ax25_cb *axp,int cmdrsp,int ctl,struct mbuf **data);
 void axnl3(struct iface *iface,struct ax25_cb *axp,uint8 *src,
@@ -172,7 +172,7 @@ void pollthem(void *p);
 void recover(void *p);
 
 /* In ax25subr.c: */
-uint16 ftype(int control);
+uint ftype(uint control);
 void lapb_garbage(int drastic);
 
 /* In axsock.c: */
